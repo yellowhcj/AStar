@@ -11,25 +11,38 @@ Window {
     minimumWidth: 1000
     minimumHeight: 800
     visible: true
-    title: "A* Algorithm Visualizer - Drag ★ and ✖, Click to Toggle Walls"
+    title: "Pathfinding Algorithms Visualizer"
 
     Pathfinder {
         id: pathfinder
         gridSize: 15
+        
+        onGridChanged: {
+            console.log("Grid changed, progress:", progress)
+            dijkstraGridRepeater.model = 0
+            dijkstraGridRepeater.model = pathfinder.gridSize * pathfinder.gridSize
+            greedyGridRepeater.model = 0  
+            greedyGridRepeater.model = pathfinder.gridSize * pathfinder.gridSize
+            aStarGridRepeater.model = 0
+            aStarGridRepeater.model = pathfinder.gridSize * pathfinder.gridSize
+        }
+        
+        onProgressChanged: {
+            console.log("Progress changed to:", progress)
+        }
     }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 15
-        spacing: 15
+        anchors.margins: 10
+        spacing: 10
 
-        // 标题和说明
         RowLayout {
             Layout.fillWidth: true
             
             ColumnLayout {
                 Text {
-                    text: "A* Algorithm Visualizer"
+                    text: "Pathfinding Algorithms Visualizer"
                     font.bold: true
                     font.pixelSize: 24
                     color: "#2c3e50"
@@ -42,80 +55,466 @@ Window {
                 }
             }
             
-            ColumnLayout {
+            RowLayout {
                 Layout.alignment: Qt.AlignRight
+                spacing: 15
                 
-                Row {
-                    spacing: 20
-                    Rectangle { width: 20; height: 20; color: "#f39c12"; border.width: 1; border.color: "#000000" }
-                    Text { text: "Start"; color: "#2c3e50"; font.pixelSize: 12 }
+                ColumnLayout {
+                    Layout.alignment: Qt.AlignRight
                     
-                    Rectangle { width: 20; height: 20; color: "#e74c3c"; border.width: 1; border.color: "#000000" }
-                    Text { text: "End"; color: "#2c3e50"; font.pixelSize: 12 }
+                    Grid {
+                        columns: 3
+                        spacing: 10
+                        
+                        LegendItem { color: "#f39c12"; text: "Start" }
+                        LegendItem { color: "#e74c3c"; text: "End" }
+                        LegendItem { color: "#34495e"; text: "Wall" }
+                        
+                        LegendItem { color: "#3498db"; text: "Open Set" }
+                        LegendItem { color: "#9b59b6"; text: "Closed Set" }
+                        LegendItem { color: "#27ae60"; text: "Path" }
+                    }
+                }
+                
+                Button {
+                    text: "🔧 Debug"
+                    font.pixelSize: 16
+                    implicitWidth: 80
+                    implicitHeight: 40
                     
-                    Rectangle { width: 20; height: 20; color: "#34495e"; border.width: 1; border.color: "#000000" }
-                    Text { text: "Wall"; color: "#2c3e50"; font.pixelSize: 12 }
+                    background: Rectangle {
+                        color: parent.pressed ? "#95a5a6" : "#bdc3c7"
+                        radius: 5
+                        border.color: "#7f8c8d"
+                        border.width: 1
+                    }
                     
-                    Rectangle { width: 20; height: 20; color: "#3498db"; border.width: 1; border.color: "#000000" }
-                    Text { text: "Open Set"; color: "#2c3e50"; font.pixelSize: 12 }
+                    contentItem: Text {
+                        text: parent.text
+                        color: "#2c3e50"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                     
-                    Rectangle { width: 20; height: 20; color: "#e74c3c"; border.width: 1; border.color: "#000000" }
-                    Text { text: "Closed Set"; color: "#2c3e50"; font.pixelSize: 12 }
-                    
-                    Rectangle { width: 20; height: 20; color: "#27ae60"; border.width: 1; border.color: "#000000" }
-                    Text { text: "Path"; color: "#2c3e50"; font.pixelSize: 12 }
+                    onClicked: {
+                        console.log("=== DEBUG BUTTON CLICKED ===")
+                        pathfinder.debugPrintGrids()
+                    }
                 }
             }
         }
 
-        // 三个算法网格
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 20
+            spacing: 10
 
-            // Dijkstra/BFS Grid
-            AlgorithmGrid {
-                Layout.preferredWidth: (parent.width - 40) / 3
+            ColumnLayout {
+                Layout.preferredWidth: (parent.width - 20) / 3
                 Layout.fillHeight: true
-                algorithmName: "Dijkstra/BFS"
-                costType: "G"
-                pathfinder: pathfinder
-                algorithm: "dijkstra"
-                showCost: true
+                spacing: 5
+
+                Text {
+                    text: "Dijkstra/BFS (G cost)"
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                    color: "#2c3e50"
+                    font.pixelSize: 14
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    border.color: "#34495e"
+                    border.width: 2
+                    radius: 5
+                    color: "transparent"
+
+                    Item {
+                        id: dijkstraGridContainer
+                        anchors.centerIn: parent
+                        width: Math.min(parent.width, parent.height) - 20
+                        height: width
+
+                        Grid {
+                            id: dijkstraGrid
+                            anchors.fill: parent
+                            rows: pathfinder.gridSize
+                            columns: pathfinder.gridSize
+                            property real cellSize: width / pathfinder.gridSize
+
+                            Repeater {
+                                id: dijkstraGridRepeater
+                                model: pathfinder.gridSize * pathfinder.gridSize
+                                
+                                delegate: Rectangle {
+                                    id: dijkstraCell
+                                    width: dijkstraGrid.cellSize
+                                    height: dijkstraGrid.cellSize
+                                    border.color: "#7f8c8d"
+                                    border.width: 0.5
+
+                                    property int cellX: index % pathfinder.gridSize
+                                    property int cellY: Math.floor(index / pathfinder.gridSize)
+                                    property var cellData: {
+                                        // 确保有数据且进度在有效范围内
+                                        if (pathfinder.dijkstraGrid && 
+                                            pathfinder.dijkstraGrid.length > cellY && 
+                                            pathfinder.dijkstraGrid[cellY] &&
+                                            pathfinder.dijkstraGrid[cellY].length > cellX) {
+                                            var data = pathfinder.dijkstraGrid[cellY][cellX];
+                                            // 调试输出异常数据
+                                            if (data.isOpen || data.isClosed || data.isPath) {
+                                                console.log("Dijkstra cell (" + cellX + "," + cellY + "):", 
+                                                           "open=" + data.isOpen, 
+                                                           "closed=" + data.isClosed, 
+                                                           "path=" + data.isPath,
+                                                           "g=" + data.g);
+                                            }
+                                            return data;
+                                        }
+                                        // 默认数据
+                                        return {
+                                            isObstacle: false, 
+                                            isOpen: false, 
+                                            isClosed: false, 
+                                            isPath: false, 
+                                            g: 0, 
+                                            h: 0, 
+                                            f: 0
+                                        };
+                                    }
+
+                                    color: {
+                                        if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12";
+                                        else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "#e74c3c";
+                                        else if (cellData.isObstacle) return "#34495e";
+                                        else if (cellData.isPath) return "#27ae60";
+                                        else if (cellData.isClosed) return "#9b59b6";
+                                        else if (cellData.isOpen) return "#3498db";
+                                        else return "#ecf0f1";
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: pathfinder.progress === 0
+                                        onClicked: {
+                                            console.log("Cell clicked: (" + cellX + "," + cellY + ")")
+                                            if (!(cellX === pathfinder.start.x && cellY === pathfinder.start.y) &&
+                                                !(cellX === pathfinder.end.x && cellY === pathfinder.end.y)) {
+                                                console.log("Toggling obstacle at: (" + cellX + "," + cellY + ")")
+                                                pathfinder.toggleObstacle(cellX, cellY);
+                                            }
+                                        }
+                                        onPressed: {
+                                            if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) {
+                                                drag.target = dijkstraStartDrag;
+                                            } else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) {
+                                                drag.target = dijkstraEndDrag;
+                                            }
+                                        }
+                                    }
+
+                                    Item {
+                                        id: dijkstraStartDrag
+                                        x: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
+                                        y: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
+                                        width: dijkstraCell.width
+                                        height: dijkstraCell.height
+                                        
+                                        Drag.active: dijkstraStartDrag.Drag.active
+                                        Drag.hotSpot.x: width / 2
+                                        Drag.hotSpot.y: height / 2
+                                        
+                                        onXChanged: if (Drag.active) updatePosition()
+                                        onYChanged: if (Drag.active) updatePosition()
+                                        
+                                        function updatePosition() {
+                                            var point = dijkstraCell.mapToItem(dijkstraGrid, dijkstraStartDrag.x + width/2, dijkstraStartDrag.y + height/2);
+                                            var newX = Math.floor(point.x / dijkstraGrid.cellSize);
+                                            var newY = Math.floor(point.y / dijkstraGrid.cellSize);
+                                            
+                                            if (newX >= 0 && newX < pathfinder.gridSize && 
+                                                newY >= 0 && newY < pathfinder.gridSize &&
+                                                !(newX === pathfinder.end.x && newY === pathfinder.end.y)) {
+                                                pathfinder.start = Qt.point(newX, newY);
+                                            }
+                                        }
+                                    }
+
+                                    Item {
+                                        id: dijkstraEndDrag
+                                        x: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
+                                        y: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
+                                        width: dijkstraCell.width
+                                        height: dijkstraCell.height
+                                        
+                                        Drag.active: dijkstraEndDrag.Drag.active
+                                        Drag.hotSpot.x: width / 2
+                                        Drag.hotSpot.y: height / 2
+                                        
+                                        onXChanged: if (Drag.active) updatePosition()
+                                        onYChanged: if (Drag.active) updatePosition()
+                                        
+                                        function updatePosition() {
+                                            var point = dijkstraCell.mapToItem(dijkstraGrid, dijkstraEndDrag.x + width/2, dijkstraEndDrag.y + height/2);
+                                            var newX = Math.floor(point.x / dijkstraGrid.cellSize);
+                                            var newY = Math.floor(point.y / dijkstraGrid.cellSize);
+                                            
+                                            if (newX >= 0 && newX < pathfinder.gridSize && 
+                                                newY >= 0 && newY < pathfinder.gridSize &&
+                                                !(newX === pathfinder.start.x && newY === pathfinder.start.y)) {
+                                                pathfinder.end = Qt.point(newX, newY);
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: {
+                                            if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "★";
+                                            else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "✖";
+                                            else if (cellData.isObstacle) return "█";
+                                            else if (cellData.isOpen || cellData.isClosed) {
+                                                return cellData.g > 0 && cellData.g < 999 ? cellData.g : "";
+                                            }
+                                            return "";
+                                        }
+                                        font.pixelSize: Math.min(dijkstraCell.width, dijkstraCell.height) * 0.4
+                                        color: "white"
+                                        font.bold: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
-            // Greedy Grid
-            AlgorithmGrid {
-                Layout.preferredWidth: (parent.width - 40) / 3
+            ColumnLayout {
+                Layout.preferredWidth: (parent.width - 20) / 3
                 Layout.fillHeight: true
-                algorithmName: "Greedy Best-First"
-                costType: "H"
-                pathfinder: pathfinder
-                algorithm: "greedy"
-                showCost: true
+                spacing: 5
+
+                Text {
+                    text: "Greedy Best-First (H cost)"
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                    color: "#2c3e50"
+                    font.pixelSize: 14
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    border.color: "#34495e"
+                    border.width: 2
+                    radius: 5
+                    color: "transparent"
+
+                    Item {
+                        id: greedyGridContainer
+                        anchors.centerIn: parent
+                        width: Math.min(parent.width, parent.height) - 20
+                        height: width
+
+                        Grid {
+                            id: greedyGrid
+                            anchors.fill: parent
+                            rows: pathfinder.gridSize
+                            columns: pathfinder.gridSize
+                            property real cellSize: width / pathfinder.gridSize
+
+                            Repeater {
+                                id: greedyGridRepeater
+                                model: pathfinder.gridSize * pathfinder.gridSize
+                                
+                                delegate: Rectangle {
+                                    id: greedyCell
+                                    width: greedyGrid.cellSize
+                                    height: greedyGrid.cellSize
+                                    border.color: "#7f8c8d"
+                                    border.width: 0.5
+
+                                    property int cellX: index % pathfinder.gridSize
+                                    property int cellY: Math.floor(index / pathfinder.gridSize)
+                                    property var cellData: {
+                                        if (pathfinder.greedyGrid &&
+                                            pathfinder.greedyGrid.length > cellY && 
+                                            pathfinder.greedyGrid[cellY] &&
+                                            pathfinder.greedyGrid[cellY].length > cellX) {
+                                            var data = pathfinder.greedyGrid[cellY][cellX];
+                                            // 调试输出异常数据
+                                            if (data.isOpen || data.isClosed || data.isPath) {
+                                                console.log("Greedy cell (" + cellX + "," + cellY + "):", 
+                                                           "open=" + data.isOpen, 
+                                                           "closed=" + data.isClosed, 
+                                                           "path=" + data.isPath,
+                                                           "h=" + data.h);
+                                            }
+                                            return data;
+                                        }
+                                        // 默认数据
+                                        return {
+                                            isObstacle: false, 
+                                            isOpen: false, 
+                                            isClosed: false, 
+                                            isPath: false, 
+                                            g: 0, 
+                                            h: 0, 
+                                            f: 0
+                                        };
+                                    }
+
+                                    color: {
+                                        if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12";
+                                        else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "#e74c3c";
+                                        else if (cellData.isObstacle) return "#34495e";
+                                        else if (cellData.isPath) return "#27ae60";
+                                        else if (cellData.isClosed) return "#9b59b6";
+                                        else if (cellData.isOpen) return "#3498db";
+                                        else return "#ecf0f1";
+                                    }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: {
+                                            if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "★";
+                                            else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "✖";
+                                            else if (cellData.isObstacle) return "█";
+                                            else if (cellData.isOpen || cellData.isClosed) {
+                                                return cellData.h > 0 ? cellData.h : "";
+                                            }
+                                            return "";
+                                        }
+                                        font.pixelSize: Math.min(greedyCell.width, greedyCell.height) * 0.4
+                                        color: "white"
+                                        font.bold: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
-            // A* Grid
-            AlgorithmGrid {
-                Layout.preferredWidth: (parent.width - 40) / 3
+            ColumnLayout {
+                Layout.preferredWidth: (parent.width - 20) / 3
                 Layout.fillHeight: true
-                algorithmName: "A*"
-                costType: "F"
-                pathfinder: pathfinder
-                algorithm: "astar"
-                showCost: true
+                spacing: 5
+
+                Text {
+                    text: "A* (F cost)"
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                    color: "#2c3e50"
+                    font.pixelSize: 14
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    border.color: "#34495e"
+                    border.width: 2
+                    radius: 5
+                    color: "transparent"
+
+                    Item {
+                        id: aStarGridContainer
+                        anchors.centerIn: parent
+                        width: Math.min(parent.width, parent.height) - 20
+                        height: width
+
+                        Grid {
+                            id: aStarGrid
+                            anchors.fill: parent
+                            rows: pathfinder.gridSize
+                            columns: pathfinder.gridSize
+                            property real cellSize: width / pathfinder.gridSize
+
+                            Repeater {
+                                id: aStarGridRepeater
+                                model: pathfinder.gridSize * pathfinder.gridSize
+                                
+                                delegate: Rectangle {
+                                    id: aStarCell
+                                    width: aStarGrid.cellSize
+                                    height: aStarGrid.cellSize
+                                    border.color: "#7f8c8d"
+                                    border.width: 0.5
+
+                                    property int cellX: index % pathfinder.gridSize
+                                    property int cellY: Math.floor(index / pathfinder.gridSize)
+                                    property var cellData: {
+                                        if (pathfinder.aStarGrid &&
+                                            pathfinder.aStarGrid.length > cellY && 
+                                            pathfinder.aStarGrid[cellY] &&
+                                            pathfinder.aStarGrid[cellY].length > cellX) {
+                                            var data = pathfinder.aStarGrid[cellY][cellX];
+                                            // 调试输出异常数据
+                                            if (data.isOpen || data.isClosed || data.isPath) {
+                                                console.log("A* cell (" + cellX + "," + cellY + "):", 
+                                                           "open=" + data.isOpen, 
+                                                           "closed=" + data.isClosed, 
+                                                           "path=" + data.isPath,
+                                                           "f=" + data.f);
+                                            }
+                                            return data;
+                                        }
+                                        // 默认数据
+                                        return {
+                                            isObstacle: false, 
+                                            isOpen: false, 
+                                            isClosed: false, 
+                                            isPath: false, 
+                                            g: 0, 
+                                            h: 0, 
+                                            f: 0
+                                        };
+                                    }
+
+                                    color: {
+                                        if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12";
+                                        else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "#e74c3c";
+                                        else if (cellData.isObstacle) return "#34495e";
+                                        else if (cellData.isPath) return "#27ae60";
+                                        else if (cellData.isClosed) return "#9b59b6";
+                                        else if (cellData.isOpen) return "#3498db";
+                                        else return "#ecf0f1";
+                                    }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: {
+                                            if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "★";
+                                            else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "✖";
+                                            else if (cellData.isObstacle) return "█";
+                                            else if (cellData.isOpen || cellData.isClosed) {
+                                                return cellData.f > 0 && cellData.f < 999 ? cellData.f : "";
+                                            }
+                                            return "";
+                                        }
+                                        font.pixelSize: Math.min(aStarCell.width, aStarCell.height) * 0.4
+                                        color: "white"
+                                        font.bold: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        // 进度条区域
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 10
+            spacing: 5
 
             Text {
-                text: "Progress: " + pathfinder.progress + " / " + pathfinder.maxProgress + 
-                      " (Step " + pathfinder.progress + " of " + pathfinder.maxProgress + ")"
+                text: `Step ${pathfinder.progress} of ${pathfinder.maxProgress}`
                 font.bold: true
                 color: "#2c3e50"
                 Layout.alignment: Qt.AlignHCenter
@@ -129,19 +528,16 @@ Window {
                 to: pathfinder.maxProgress
                 value: pathfinder.progress
                 stepSize: 1
+                snapMode: Slider.SnapAlways
+                
                 onMoved: {
-                    pathfinder.progress = Math.round(value);
+                    pathfinder.progress = value
                 }
 
                 background: Rectangle {
-                    x: progressBar.leftPadding
-                    y: progressBar.topPadding + progressBar.availableHeight / 2 - height / 2
-                    implicitWidth: 200
                     implicitHeight: 8
-                    width: progressBar.availableWidth
-                    height: implicitHeight
-                    radius: 4
                     color: "#bdc3c7"
+                    radius: 4
 
                     Rectangle {
                         width: progressBar.visualPosition * parent.width
@@ -160,22 +556,13 @@ Window {
                     color: progressBar.pressed ? "#2980b9" : "#3498db"
                     border.color: "#2c3e50"
                     border.width: 2
-                    
-                    Text {
-                        anchors.centerIn: parent
-                        text: pathfinder.progress
-                        color: "white"
-                        font.bold: true
-                        font.pixelSize: 10
-                    }
                 }
             }
         }
 
-        // 控制按钮
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
-            spacing: 25
+            spacing: 15
 
             ControlButton {
                 text: "⏪ Step Back"
@@ -185,15 +572,8 @@ Window {
             }
 
             ControlButton {
-                id: simulationButton
-                text: pathfinder.isRunning ? "⏹ Stop" : "▶ Start Simulation"
-                onClicked: {
-                    if (pathfinder.isRunning) {
-                        pathfinder.stopSimulation();
-                    } else {
-                        pathfinder.startSimulation();
-                    }
-                }
+                text: pathfinder.isRunning ? "⏹ Stop" : "▶ Start"
+                onClicked: pathfinder.isRunning ? pathfinder.stopSimulation() : pathfinder.startSimulation()
                 backgroundColor: pathfinder.isRunning ? "#e74c3c" : "#27ae60"
             }
 
@@ -211,188 +591,52 @@ Window {
             }
         }
 
-        // 提示信息
         Text {
-            text: "💡 Tip: You can only modify walls and drag start/end points when progress is at 0%"
+            text: pathfinder.progress === 0 ? 
+                  "💡 Click to toggle walls • Drag ★ and ✖ to move start/end points" :
+                  "💡 Reset to step 0 to modify the map"
             font.pixelSize: 12
-            color: "#e74c3c"
+            color: pathfinder.progress === 0 ? "#27ae60" : "#e74c3c"
             font.italic: true
             Layout.alignment: Qt.AlignHCenter
-            visible: pathfinder.progress !== 0
         }
     }
 
-    // 算法网格组件
-    component AlgorithmGrid: ColumnLayout {
-        required property string algorithmName
-        required property string costType
-        required property Pathfinder pathfinder
-        required property string algorithm
-        required property bool showCost
-
-        Layout.preferredWidth: parent.width / 3
-        Layout.fillHeight: true
-        spacing: 8
-
-        Text {
-            text: algorithmName + " (Shows " + costType + " cost)"
-            font.bold: true
-            horizontalAlignment: Text.AlignHCenter
-            Layout.fillWidth: true
-            color: "#2c3e50"
-            font.pixelSize: 16
-        }
-
+    component LegendItem: RowLayout {
+        required property color color
+        required property string text
+        
+        spacing: 5
+        
         Rectangle {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            border.color: "#34495e"
-            border.width: 3
-            radius: 8
-            color: "transparent"
-
-            Grid {
-                id: grid
-                anchors.fill: parent
-                anchors.margins: 4
-                rows: pathfinder.gridSize
-                columns: pathfinder.gridSize
-                property real cellSize: Math.min(width / pathfinder.gridSize, height / pathfinder.gridSize)
-
-                Repeater {
-                    model: pathfinder.gridSize * pathfinder.gridSize
-                    delegate: Rectangle {
-                        width: grid.cellSize
-                        height: grid.cellSize
-                        border.color: "#7f8c8d"
-                        border.width: 1
-
-                        property int cellX: index % pathfinder.gridSize
-                        property int cellY: Math.floor(index / pathfinder.gridSize)
-                        property var cellData: {
-                            var gridData = algorithm === "dijkstra" ? pathfinder.dijkstraGrid :
-                                          algorithm === "greedy" ? pathfinder.greedyGrid :
-                                          pathfinder.aStarGrid;
-                            if (gridData && gridData[cellY] && gridData[cellY][cellX] !== undefined) {
-                                return gridData[cellY][cellX];
-                            } else {
-                                return {isObstacle: false, isOpen: false, isClosed: false, g: 0, h: 0, f: 0};
-                            }
-                        }
-
-                        color: {
-                            if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12"; // 橙色起点
-                            else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "#e74c3c"; // 红色终点
-                            else if (cellData.isObstacle) return "#34495e"; // 深灰色障碍物
-                            else if (pathfinder.isInPath(cellX, cellY, algorithm)) return "#27ae60"; // 绿色路径
-                            else if (cellData.isClosed) return "#e74c3c"; // 红色已关闭
-                            else if (cellData.isOpen) return "#3498db"; // 蓝色开放集合
-                            else return "#ecf0f1"; // 浅灰色未探索
-                        }
-
-                        // Open set 的边框加粗
-                        Rectangle {
-                            anchors.fill: parent
-                            color: "transparent"
-                            border.color: "#f1c40f"
-                            border.width: cellData.isOpen ? 3 : 0
-                            visible: cellData.isOpen
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            enabled: pathfinder.progress === 0
-                            onClicked: {
-                                if (!(cellX === pathfinder.start.x && cellY === pathfinder.start.y) &&
-                                    !(cellX === pathfinder.end.x && cellY === pathfinder.end.y)) {
-                                    pathfinder.toggleObstacle(cellX, cellY);
-                                }
-                            }
-                            onPressed: {
-                                if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) {
-                                    drag.target = startDragHandler;
-                                } else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) {
-                                    drag.target = endDragHandler;
-                                }
-                            }
-                            
-                            onPositionChanged: {
-                                if (drag.target && pathfinder.progress === 0) {
-                                    var newX = Math.floor(mouseX / grid.cellSize);
-                                    var newY = Math.floor(mouseY / grid.cellSize);
-                                    
-                                    if (newX >= 0 && newX < pathfinder.gridSize && 
-                                        newY >= 0 && newY < pathfinder.gridSize) {
-                                        
-                                        if (drag.target === startDragHandler) {
-                                            pathfinder.start = Qt.point(newX, newY);
-                                        } else if (drag.target === endDragHandler) {
-                                            pathfinder.end = Qt.point(newX, newY);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: {
-                                if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "★";
-                                else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "✖";
-                                else if (cellData.isObstacle) return "█";
-                                else if (showCost && (cellData.isClosed || cellData.isOpen)) {
-                                    if (algorithm === "dijkstra") return cellData.g;
-                                    else if (algorithm === "greedy") return cellData.h;
-                                    else return cellData.f;
-                                } else return "";
-                            }
-                            font.pixelSize: Math.min(width, height) * 0.35
-                            color: (cellX === pathfinder.start.x && cellY === pathfinder.start.y) || 
-                                   (cellX === pathfinder.end.x && cellY === pathfinder.end.y) ? 
-                                   "white" : "white"
-                            font.bold: true
-                        }
-
-                        // 拖拽处理器
-                        DragHandler {
-                            id: startDragHandler
-                            target: null
-                        }
-
-                        DragHandler {
-                            id: endDragHandler
-                            target: null
-                        }
-                    }
-                }
-            }
+            width: 16
+            height: 16
+            color: parent.color
+            border.width: 1
+            border.color: "#000000"
+        }
+        
+        Text {
+            text: parent.text
+            color: "#2c3e50"
+            font.pixelSize: 12
         }
     }
 
-    // 控制按钮组件
     component ControlButton: Button {
         required property string backgroundColor
-        property alias buttonText: textItem.text
         
         implicitWidth: 140
-        implicitHeight: 45
+        implicitHeight: 40
         
         background: Rectangle {
             color: parent.enabled ? backgroundColor : "#bdc3c7"
             radius: 8
             border.color: "#2c3e50"
             border.width: 2
-            
-            Rectangle {
-                anchors.fill: parent
-                color: parent.color
-                opacity: parent.parent.pressed ? 0.7 : 0
-                Behavior on opacity { NumberAnimation { duration: 100 } }
-            }
         }
         
         contentItem: Text {
-            id: textItem
             text: parent.text
             font.bold: true
             font.pixelSize: 14
