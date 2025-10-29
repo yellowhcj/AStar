@@ -19,6 +19,7 @@ Window {
         
         onGridChanged: {
             console.log("Grid changed, progress:", progress)
+            // 强制刷新所有网格
             dijkstraGridRepeater.model = 0
             dijkstraGridRepeater.model = pathfinder.gridSize * pathfinder.gridSize
             greedyGridRepeater.model = 0  
@@ -148,6 +149,7 @@ Window {
                                 id: dijkstraGridRepeater
                                 model: pathfinder.gridSize * pathfinder.gridSize
                                 
+                                // Dijkstra 网格 delegate - 使用直接函数调用
                                 delegate: Rectangle {
                                     id: dijkstraCell
                                     width: dijkstraGrid.cellSize
@@ -157,36 +159,19 @@ Window {
 
                                     property int cellX: index % pathfinder.gridSize
                                     property int cellY: Math.floor(index / pathfinder.gridSize)
-                                    property var cellData: {
-                                        // 确保有数据且进度在有效范围内
-                                        if (pathfinder.dijkstraGrid && 
-                                            pathfinder.dijkstraGrid.length > cellY && 
-                                            pathfinder.dijkstraGrid[cellY] &&
-                                            pathfinder.dijkstraGrid[cellY].length > cellX) {
-                                            var data = pathfinder.dijkstraGrid[cellY][cellX];
-                                            // 调试输出异常数据
-                                            if (data.isOpen || data.isClosed || data.isPath) {
-                                                console.log("Dijkstra cell (" + cellX + "," + cellY + "):", 
-                                                           "open=" + data.isOpen, 
-                                                           "closed=" + data.isClosed, 
-                                                           "path=" + data.isPath,
-                                                           "g=" + data.g);
-                                            }
-                                            return data;
-                                        }
-                                        // 默认数据
-                                        return {
-                                            isObstacle: false, 
-                                            isOpen: false, 
-                                            isClosed: false, 
-                                            isPath: false, 
-                                            g: 0, 
-                                            h: 0, 
-                                            f: 0
-                                        };
-                                    }
+                                    
+                                    // 使用直接函数调用获取数据
+                                    property var cellData: pathfinder.getDijkstraCell(cellX, cellY)
 
                                     color: {
+                                        // 调试输出：检查关键单元格的数据
+                                        if (cellX === 0 && cellY === 0) {
+                                            console.log("Dijkstra (0,0):", "open=" + cellData.isOpen, "closed=" + cellData.isClosed, "path=" + cellData.isPath)
+                                        }
+                                        if (cellX === 1 && cellY === 0) {
+                                            console.log("Dijkstra (1,0):", "open=" + cellData.isOpen, "closed=" + cellData.isClosed, "path=" + cellData.isPath)
+                                        }
+                                        
                                         if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12";
                                         else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "#e74c3c";
                                         else if (cellData.isObstacle) return "#34495e";
@@ -331,6 +316,7 @@ Window {
                                 id: greedyGridRepeater
                                 model: pathfinder.gridSize * pathfinder.gridSize
                                 
+                                // Greedy 网格 delegate - 使用直接函数调用
                                 delegate: Rectangle {
                                     id: greedyCell
                                     width: greedyGrid.cellSize
@@ -340,33 +326,8 @@ Window {
 
                                     property int cellX: index % pathfinder.gridSize
                                     property int cellY: Math.floor(index / pathfinder.gridSize)
-                                    property var cellData: {
-                                        if (pathfinder.greedyGrid &&
-                                            pathfinder.greedyGrid.length > cellY && 
-                                            pathfinder.greedyGrid[cellY] &&
-                                            pathfinder.greedyGrid[cellY].length > cellX) {
-                                            var data = pathfinder.greedyGrid[cellY][cellX];
-                                            // 调试输出异常数据
-                                            if (data.isOpen || data.isClosed || data.isPath) {
-                                                console.log("Greedy cell (" + cellX + "," + cellY + "):", 
-                                                           "open=" + data.isOpen, 
-                                                           "closed=" + data.isClosed, 
-                                                           "path=" + data.isPath,
-                                                           "h=" + data.h);
-                                            }
-                                            return data;
-                                        }
-                                        // 默认数据
-                                        return {
-                                            isObstacle: false, 
-                                            isOpen: false, 
-                                            isClosed: false, 
-                                            isPath: false, 
-                                            g: 0, 
-                                            h: 0, 
-                                            f: 0
-                                        };
-                                    }
+                                    
+                                    property var cellData: pathfinder.getGreedyCell(cellX, cellY)
 
                                     color: {
                                         if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12";
@@ -439,6 +400,7 @@ Window {
                                 id: aStarGridRepeater
                                 model: pathfinder.gridSize * pathfinder.gridSize
                                 
+                                // A* 网格 delegate - 使用直接函数调用
                                 delegate: Rectangle {
                                     id: aStarCell
                                     width: aStarGrid.cellSize
@@ -448,33 +410,8 @@ Window {
 
                                     property int cellX: index % pathfinder.gridSize
                                     property int cellY: Math.floor(index / pathfinder.gridSize)
-                                    property var cellData: {
-                                        if (pathfinder.aStarGrid &&
-                                            pathfinder.aStarGrid.length > cellY && 
-                                            pathfinder.aStarGrid[cellY] &&
-                                            pathfinder.aStarGrid[cellY].length > cellX) {
-                                            var data = pathfinder.aStarGrid[cellY][cellX];
-                                            // 调试输出异常数据
-                                            if (data.isOpen || data.isClosed || data.isPath) {
-                                                console.log("A* cell (" + cellX + "," + cellY + "):", 
-                                                           "open=" + data.isOpen, 
-                                                           "closed=" + data.isClosed, 
-                                                           "path=" + data.isPath,
-                                                           "f=" + data.f);
-                                            }
-                                            return data;
-                                        }
-                                        // 默认数据
-                                        return {
-                                            isObstacle: false, 
-                                            isOpen: false, 
-                                            isClosed: false, 
-                                            isPath: false, 
-                                            g: 0, 
-                                            h: 0, 
-                                            f: 0
-                                        };
-                                    }
+                                    
+                                    property var cellData: pathfinder.getAStarCell(cellX, cellY)
 
                                     color: {
                                         if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12";

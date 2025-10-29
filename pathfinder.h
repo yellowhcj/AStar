@@ -14,9 +14,6 @@ class Pathfinder : public QObject {
     Q_PROPERTY(int gridSize READ gridSize WRITE setGridSize NOTIFY gridSizeChanged)
     Q_PROPERTY(QPoint start READ start WRITE setStart NOTIFY startChanged)
     Q_PROPERTY(QPoint end READ end WRITE setEnd NOTIFY endChanged)
-    Q_PROPERTY(QVariantList dijkstraGrid READ dijkstraGrid NOTIFY gridChanged)
-    Q_PROPERTY(QVariantList greedyGrid READ greedyGrid NOTIFY gridChanged)
-    Q_PROPERTY(QVariantList aStarGrid READ aStarGrid NOTIFY gridChanged)
     Q_PROPERTY(int progress READ progress WRITE setProgress NOTIFY progressChanged)
     Q_PROPERTY(int maxProgress READ maxProgress NOTIFY maxProgressChanged)
     Q_PROPERTY(bool isRunning READ isRunning NOTIFY isRunningChanged)
@@ -33,10 +30,6 @@ public:
     QPoint end() const;
     void setEnd(const QPoint &point);
 
-    QVariantList dijkstraGrid() const;
-    QVariantList greedyGrid() const;
-    QVariantList aStarGrid() const;
-
     int progress() const;
     void setProgress(int progress);
     
@@ -51,15 +44,20 @@ public:
     Q_INVOKABLE void stopSimulation();
     Q_INVOKABLE void resetSimulation();
     Q_INVOKABLE void debugPrintGrids();
+    
+    // 新增：直接获取单元格数据的函数
+    Q_INVOKABLE QVariantMap getDijkstraCell(int x, int y) const;
+    Q_INVOKABLE QVariantMap getGreedyCell(int x, int y) const;
+    Q_INVOKABLE QVariantMap getAStarCell(int x, int y) const;
 
 signals:
     void gridSizeChanged();
     void startChanged();
     void endChanged();
-    void gridChanged();
     void progressChanged();
     void maxProgressChanged();
     void isRunningChanged();
+    void gridChanged();
 
 private:
     struct Cell {
@@ -69,8 +67,14 @@ private:
         bool isOpen, isClosed;
         Cell *parent;
         
-        Cell() : x(0), y(0), isObstacle(false), g(0), h(0), f(0), 
+        Cell() : x(0), y(0), isObstacle(false), g(INT_MAX), h(0), f(INT_MAX), 
                 isOpen(false), isClosed(false), parent(nullptr) {}
+        
+        // 深拷贝构造函数
+        Cell(const Cell& other) 
+            : x(other.x), y(other.y), isObstacle(other.isObstacle), 
+              g(other.g), h(other.h), f(other.f),
+              isOpen(other.isOpen), isClosed(other.isClosed), parent(other.parent) {}
     };
 
     struct AlgorithmState {
@@ -79,12 +83,15 @@ private:
         QVector<QPoint> path;
         bool finished;
         
-        QVector<QVariantList> stepGrids;
+        // 存储每一步的状态 - 使用深拷贝的网格
+        QVector<QVector<QVector<Cell>>> stepGrids;
         QVector<QVector<QPoint>> stepPaths;
         
         AlgorithmState(std::function<bool(Cell*, Cell*)> cmp) : 
             openSet(cmp), finished(false) {}
     };
+    
+    void computeAlgorithm(AlgorithmState& state, const std::function<int(int, int, int, int)>& heuristicFunc, bool useG);
 
     int m_gridSize;
     QPoint m_start;
@@ -104,12 +111,16 @@ private:
 
     void initializeGrids();
     void recomputeAllAlgorithms();
-    void computeAlgorithm(AlgorithmState& state, const std::function<int(int, int, int, int)>& heuristicFunc, bool useG);
-    int getOpenSetSize(AlgorithmState& state);  // 添加函数声明
+    
+    bool stepAlgorithm(AlgorithmState& state, const std::function<int(int, int, int, int)>& heuristicFunc, bool useG);
+    
     int heuristic(int x1, int y1, int x2, int y2);
     void reconstructPath(AlgorithmState &state, Cell *current);
+    QVariantMap cellToVariantMap(const Cell& cell, bool inPath) const;
     QVariantList gridToVariantList(const QVector<QVector<Cell>>& grid, const QVector<QPoint>& path) const;
     Cell* getCell(QVector<QVector<Cell>>& grid, int x, int y);
+    
+    QVector<QVector<Cell>> deepCopyGrid(const QVector<QVector<Cell>>& source) const;
     
     void debugPrintGrid(const QString& name, const QVector<QVector<Cell>>& grid, const QVector<QPoint>& path) const;
 };
