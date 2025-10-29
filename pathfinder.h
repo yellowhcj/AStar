@@ -45,7 +45,7 @@ public:
     Q_INVOKABLE void resetSimulation();
     Q_INVOKABLE void debugPrintGrids();
     
-    // 新增：直接获取单元格数据的函数
+    // 直接获取单元格数据的函数
     Q_INVOKABLE QVariantMap getDijkstraCell(int x, int y) const;
     Q_INVOKABLE QVariantMap getGreedyCell(int x, int y) const;
     Q_INVOKABLE QVariantMap getAStarCell(int x, int y) const;
@@ -70,7 +70,6 @@ private:
         Cell() : x(0), y(0), isObstacle(false), g(INT_MAX), h(0), f(INT_MAX), 
                 isOpen(false), isClosed(false), parent(nullptr) {}
         
-        // 深拷贝构造函数
         Cell(const Cell& other) 
             : x(other.x), y(other.y), isObstacle(other.isObstacle), 
               g(other.g), h(other.h), f(other.f),
@@ -80,12 +79,12 @@ private:
     struct AlgorithmState {
         QVector<QVector<Cell>> grid;
         std::priority_queue<Cell*, std::vector<Cell*>, std::function<bool(Cell*, Cell*)>> openSet;
-        QVector<QPoint> path;
+        QVector<QPoint> finalPath;  // 最终路径
         bool finished;
         
-        // 存储每一步的状态 - 使用深拷贝的网格
         QVector<QVector<QVector<Cell>>> stepGrids;
-        QVector<QVector<QPoint>> stepPaths;
+        QVector<QVector<QPoint>> stepPaths;       // 添加缺失的成员
+        QVector<QVector<QPoint>> stepFinalPaths;  // 添加缺失的成员
         
         AlgorithmState(std::function<bool(Cell*, Cell*)> cmp) : 
             openSet(cmp), finished(false) {}
@@ -116,8 +115,7 @@ private:
     
     int heuristic(int x1, int y1, int x2, int y2);
     void reconstructPath(AlgorithmState &state, Cell *current);
-    QVariantMap cellToVariantMap(const Cell& cell, bool inPath) const;
-    QVariantList gridToVariantList(const QVector<QVector<Cell>>& grid, const QVector<QPoint>& path) const;
+    QVariantMap cellToVariantMap(const Cell& cell, bool inFinalPath) const;  // 简化：只保留最终路径参数
     Cell* getCell(QVector<QVector<Cell>>& grid, int x, int y);
     
     QVector<QVector<Cell>> deepCopyGrid(const QVector<QVector<Cell>>& source) const;

@@ -77,10 +77,11 @@ Window {
                     }
                 }
                 
+                // 添加交互调试按钮
                 Button {
-                    text: "🔧 Debug"
+                    text: "🗺️ Map Debug"
                     font.pixelSize: 16
-                    implicitWidth: 80
+                    implicitWidth: 100
                     implicitHeight: 40
                     
                     background: Rectangle {
@@ -98,7 +99,37 @@ Window {
                     }
                     
                     onClicked: {
-                        console.log("=== DEBUG BUTTON CLICKED ===")
+                        console.log("=== MAP DEBUG BUTTON CLICKED ===")
+                        console.log("Current progress:", pathfinder.progress)
+                        console.log("Start position: (" + pathfinder.start.x + "," + pathfinder.start.y + ")")
+                        console.log("End position: (" + pathfinder.end.x + "," + pathfinder.end.y + ")")
+                        console.log("Grid size:", pathfinder.gridSize)
+                        console.log("Max progress:", pathfinder.maxProgress)
+                    }
+                }
+                
+                Button {
+                    text: "🔧 Algo Debug"
+                    font.pixelSize: 16
+                    implicitWidth: 100
+                    implicitHeight: 40
+                    
+                    background: Rectangle {
+                        color: parent.pressed ? "#95a5a6" : "#bdc3c7"
+                        radius: 5
+                        border.color: "#7f8c8d"
+                        border.width: 1
+                    }
+                    
+                    contentItem: Text {
+                        text: parent.text
+                        color: "#2c3e50"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: {
+                        console.log("=== ALGORITHM DEBUG BUTTON CLICKED ===")
                         pathfinder.debugPrintGrids()
                     }
                 }
@@ -149,7 +180,6 @@ Window {
                                 id: dijkstraGridRepeater
                                 model: pathfinder.gridSize * pathfinder.gridSize
                                 
-                                // Dijkstra 网格 delegate - 使用直接函数调用
                                 delegate: Rectangle {
                                     id: dijkstraCell
                                     width: dijkstraGrid.cellSize
@@ -164,43 +194,65 @@ Window {
                                     property var cellData: pathfinder.getDijkstraCell(cellX, cellY)
 
                                     color: {
-                                        // 调试输出：检查关键单元格的数据
-                                        if (cellX === 0 && cellY === 0) {
-                                            console.log("Dijkstra (0,0):", "open=" + cellData.isOpen, "closed=" + cellData.isClosed, "path=" + cellData.isPath)
-                                        }
-                                        if (cellX === 1 && cellY === 0) {
-                                            console.log("Dijkstra (1,0):", "open=" + cellData.isOpen, "closed=" + cellData.isClosed, "path=" + cellData.isPath)
-                                        }
-                                        
                                         if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12";
                                         else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "#e74c3c";
                                         else if (cellData.isObstacle) return "#34495e";
-                                        else if (cellData.isPath) return "#27ae60";
+                                        else if (cellData.isFinalPath) return "#27ae60";
                                         else if (cellData.isClosed) return "#9b59b6";
                                         else if (cellData.isOpen) return "#3498db";
                                         else return "#ecf0f1";
                                     }
 
+                                    // 修复：确保鼠标交互正常工作
                                     MouseArea {
+                                        id: dijkstraMouseArea
                                         anchors.fill: parent
                                         enabled: pathfinder.progress === 0
-                                        onClicked: {
-                                            console.log("Cell clicked: (" + cellX + "," + cellY + ")")
-                                            if (!(cellX === pathfinder.start.x && cellY === pathfinder.start.y) &&
-                                                !(cellX === pathfinder.end.x && cellY === pathfinder.end.y)) {
-                                                console.log("Toggling obstacle at: (" + cellX + "," + cellY + ")")
-                                                pathfinder.toggleObstacle(cellX, cellY);
+                                        hoverEnabled: true
+                                        
+                                        onEntered: {
+                                            if (pathfinder.progress === 0) {
+                                                dijkstraCell.border.width = 2
+                                                dijkstraCell.border.color = "#e74c3c"
                                             }
                                         }
+                                        
+                                        onExited: {
+                                            dijkstraCell.border.width = 0.5
+                                            dijkstraCell.border.color = "#7f8c8d"
+                                        }
+                                        
+                                        onClicked: {
+                                            console.log("=== DIJKSTRA CELL CLICKED ===")
+                                            console.log("Cell coordinates: (" + cellX + "," + cellY + ")")
+                                            console.log("Current progress: " + pathfinder.progress)
+                                            console.log("Start position: (" + pathfinder.start.x + "," + pathfinder.start.y + ")")
+                                            console.log("End position: (" + pathfinder.end.x + "," + pathfinder.end.y + ")")
+                                            
+                                            if (!(cellX === pathfinder.start.x && cellY === pathfinder.start.y) &&
+                                                !(cellX === pathfinder.end.x && cellY === pathfinder.end.y)) {
+                                                console.log("Calling toggleObstacle...")
+                                                pathfinder.toggleObstacle(cellX, cellY);
+                                            } else {
+                                                console.log("Cell is start or end position, skipping toggle")
+                                            }
+                                        }
+                                        
                                         onPressed: {
-                                            if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) {
-                                                drag.target = dijkstraStartDrag;
-                                            } else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) {
-                                                drag.target = dijkstraEndDrag;
+                                            console.log("Mouse pressed on cell (" + cellX + "," + cellY + ")")
+                                            if (pathfinder.progress === 0) {
+                                                if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) {
+                                                    console.log("Starting start drag...")
+                                                    drag.target = dijkstraStartDrag;
+                                                } else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) {
+                                                    console.log("Starting end drag...")
+                                                    drag.target = dijkstraEndDrag;
+                                                }
                                             }
                                         }
                                     }
 
+                                    // 起点拖动
                                     Item {
                                         id: dijkstraStartDrag
                                         x: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
@@ -208,7 +260,8 @@ Window {
                                         width: dijkstraCell.width
                                         height: dijkstraCell.height
                                         
-                                        Drag.active: dijkstraStartDrag.Drag.active
+                                        Drag.active: dijkstraMouseArea.drag.active && 
+                                                    cellX === pathfinder.start.x && cellY === pathfinder.start.y
                                         Drag.hotSpot.x: width / 2
                                         Drag.hotSpot.y: height / 2
                                         
@@ -216,9 +269,13 @@ Window {
                                         onYChanged: if (Drag.active) updatePosition()
                                         
                                         function updatePosition() {
+                                            if (pathfinder.progress !== 0) return;
+                                            
                                             var point = dijkstraCell.mapToItem(dijkstraGrid, dijkstraStartDrag.x + width/2, dijkstraStartDrag.y + height/2);
                                             var newX = Math.floor(point.x / dijkstraGrid.cellSize);
                                             var newY = Math.floor(point.y / dijkstraGrid.cellSize);
+                                            
+                                            console.log("Updating start position to: (" + newX + "," + newY + ")")
                                             
                                             if (newX >= 0 && newX < pathfinder.gridSize && 
                                                 newY >= 0 && newY < pathfinder.gridSize &&
@@ -228,6 +285,7 @@ Window {
                                         }
                                     }
 
+                                    // 终点拖动
                                     Item {
                                         id: dijkstraEndDrag
                                         x: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
@@ -235,7 +293,8 @@ Window {
                                         width: dijkstraCell.width
                                         height: dijkstraCell.height
                                         
-                                        Drag.active: dijkstraEndDrag.Drag.active
+                                        Drag.active: dijkstraMouseArea.drag.active && 
+                                                    cellX === pathfinder.end.x && cellY === pathfinder.end.y
                                         Drag.hotSpot.x: width / 2
                                         Drag.hotSpot.y: height / 2
                                         
@@ -243,9 +302,13 @@ Window {
                                         onYChanged: if (Drag.active) updatePosition()
                                         
                                         function updatePosition() {
+                                            if (pathfinder.progress !== 0) return;
+                                            
                                             var point = dijkstraCell.mapToItem(dijkstraGrid, dijkstraEndDrag.x + width/2, dijkstraEndDrag.y + height/2);
                                             var newX = Math.floor(point.x / dijkstraGrid.cellSize);
                                             var newY = Math.floor(point.y / dijkstraGrid.cellSize);
+                                            
+                                            console.log("Updating end position to: (" + newX + "," + newY + ")")
                                             
                                             if (newX >= 0 && newX < pathfinder.gridSize && 
                                                 newY >= 0 && newY < pathfinder.gridSize &&
@@ -316,7 +379,7 @@ Window {
                                 id: greedyGridRepeater
                                 model: pathfinder.gridSize * pathfinder.gridSize
                                 
-                                // Greedy 网格 delegate - 使用直接函数调用
+                                // Greedy 网格 delegate - 简化颜色逻辑
                                 delegate: Rectangle {
                                     id: greedyCell
                                     width: greedyGrid.cellSize
@@ -333,10 +396,90 @@ Window {
                                         if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12";
                                         else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "#e74c3c";
                                         else if (cellData.isObstacle) return "#34495e";
-                                        else if (cellData.isPath) return "#27ae60";
+                                        else if (cellData.isFinalPath) return "#27ae60";  // 只显示最终路径
                                         else if (cellData.isClosed) return "#9b59b6";
                                         else if (cellData.isOpen) return "#3498db";
                                         else return "#ecf0f1";
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: pathfinder.progress === 0
+                                        onClicked: {
+                                            console.log("Cell clicked: (" + cellX + "," + cellY + ")")
+                                            if (!(cellX === pathfinder.start.x && cellY === pathfinder.start.y) &&
+                                                !(cellX === pathfinder.end.x && cellY === pathfinder.end.y)) {
+                                                console.log("Toggling obstacle at: (" + cellX + "," + cellY + ")")
+                                                pathfinder.toggleObstacle(cellX, cellY);
+                                            }
+                                        }
+                                        onPressed: {
+                                            if (pathfinder.progress === 0) {
+                                                if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) {
+                                                    drag.target = greedyStartDrag;
+                                                } else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) {
+                                                    drag.target = greedyEndDrag;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Item {
+                                        id: greedyStartDrag
+                                        x: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
+                                        y: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
+                                        width: greedyCell.width
+                                        height: greedyCell.height
+                                        
+                                        Drag.active: greedyStartDrag.Drag.active
+                                        Drag.hotSpot.x: width / 2
+                                        Drag.hotSpot.y: height / 2
+                                        
+                                        onXChanged: if (Drag.active) updatePosition()
+                                        onYChanged: if (Drag.active) updatePosition()
+                                        
+                                        function updatePosition() {
+                                            if (pathfinder.progress !== 0) return;
+                                            
+                                            var point = greedyCell.mapToItem(greedyGrid, greedyStartDrag.x + width/2, greedyStartDrag.y + height/2);
+                                            var newX = Math.floor(point.x / greedyGrid.cellSize);
+                                            var newY = Math.floor(point.y / greedyGrid.cellSize);
+                                            
+                                            if (newX >= 0 && newX < pathfinder.gridSize && 
+                                                newY >= 0 && newY < pathfinder.gridSize &&
+                                                !(newX === pathfinder.end.x && newY === pathfinder.end.y)) {
+                                                pathfinder.start = Qt.point(newX, newY);
+                                            }
+                                        }
+                                    }
+
+                                    Item {
+                                        id: greedyEndDrag
+                                        x: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
+                                        y: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
+                                        width: greedyCell.width
+                                        height: greedyCell.height
+                                        
+                                        Drag.active: greedyEndDrag.Drag.active
+                                        Drag.hotSpot.x: width / 2
+                                        Drag.hotSpot.y: height / 2
+                                        
+                                        onXChanged: if (Drag.active) updatePosition()
+                                        onYChanged: if (Drag.active) updatePosition()
+                                        
+                                        function updatePosition() {
+                                            if (pathfinder.progress !== 0) return;
+                                            
+                                            var point = greedyCell.mapToItem(greedyGrid, greedyEndDrag.x + width/2, greedyEndDrag.y + height/2);
+                                            var newX = Math.floor(point.x / greedyGrid.cellSize);
+                                            var newY = Math.floor(point.y / greedyGrid.cellSize);
+                                            
+                                            if (newX >= 0 && newX < pathfinder.gridSize && 
+                                                newY >= 0 && newY < pathfinder.gridSize &&
+                                                !(newX === pathfinder.start.x && newY === pathfinder.start.y)) {
+                                                pathfinder.end = Qt.point(newX, newY);
+                                            }
+                                        }
                                     }
 
                                     Text {
@@ -400,7 +543,7 @@ Window {
                                 id: aStarGridRepeater
                                 model: pathfinder.gridSize * pathfinder.gridSize
                                 
-                                // A* 网格 delegate - 使用直接函数调用
+                                // A* 网格 delegate - 简化颜色逻辑
                                 delegate: Rectangle {
                                     id: aStarCell
                                     width: aStarGrid.cellSize
@@ -417,10 +560,90 @@ Window {
                                         if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12";
                                         else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "#e74c3c";
                                         else if (cellData.isObstacle) return "#34495e";
-                                        else if (cellData.isPath) return "#27ae60";
+                                        else if (cellData.isFinalPath) return "#27ae60";  // 只显示最终路径
                                         else if (cellData.isClosed) return "#9b59b6";
                                         else if (cellData.isOpen) return "#3498db";
                                         else return "#ecf0f1";
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: pathfinder.progress === 0
+                                        onClicked: {
+                                            console.log("Cell clicked: (" + cellX + "," + cellY + ")")
+                                            if (!(cellX === pathfinder.start.x && cellY === pathfinder.start.y) &&
+                                                !(cellX === pathfinder.end.x && cellY === pathfinder.end.y)) {
+                                                console.log("Toggling obstacle at: (" + cellX + "," + cellY + ")")
+                                                pathfinder.toggleObstacle(cellX, cellY);
+                                            }
+                                        }
+                                        onPressed: {
+                                            if (pathfinder.progress === 0) {
+                                                if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) {
+                                                    drag.target = aStarStartDrag;
+                                                } else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) {
+                                                    drag.target = aStarEndDrag;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Item {
+                                        id: aStarStartDrag
+                                        x: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
+                                        y: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
+                                        width: aStarCell.width
+                                        height: aStarCell.height
+                                        
+                                        Drag.active: aStarStartDrag.Drag.active
+                                        Drag.hotSpot.x: width / 2
+                                        Drag.hotSpot.y: height / 2
+                                        
+                                        onXChanged: if (Drag.active) updatePosition()
+                                        onYChanged: if (Drag.active) updatePosition()
+                                        
+                                        function updatePosition() {
+                                            if (pathfinder.progress !== 0) return;
+                                            
+                                            var point = aStarCell.mapToItem(aStarGrid, aStarStartDrag.x + width/2, aStarStartDrag.y + height/2);
+                                            var newX = Math.floor(point.x / aStarGrid.cellSize);
+                                            var newY = Math.floor(point.y / aStarGrid.cellSize);
+                                            
+                                            if (newX >= 0 && newX < pathfinder.gridSize && 
+                                                newY >= 0 && newY < pathfinder.gridSize &&
+                                                !(newX === pathfinder.end.x && newY === pathfinder.end.y)) {
+                                                pathfinder.start = Qt.point(newX, newY);
+                                            }
+                                        }
+                                    }
+
+                                    Item {
+                                        id: aStarEndDrag
+                                        x: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
+                                        y: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
+                                        width: aStarCell.width
+                                        height: aStarCell.height
+                                        
+                                        Drag.active: aStarEndDrag.Drag.active
+                                        Drag.hotSpot.x: width / 2
+                                        Drag.hotSpot.y: height / 2
+                                        
+                                        onXChanged: if (Drag.active) updatePosition()
+                                        onYChanged: if (Drag.active) updatePosition()
+                                        
+                                        function updatePosition() {
+                                            if (pathfinder.progress !== 0) return;
+                                            
+                                            var point = aStarCell.mapToItem(aStarGrid, aStarEndDrag.x + width/2, aStarEndDrag.y + height/2);
+                                            var newX = Math.floor(point.x / aStarGrid.cellSize);
+                                            var newY = Math.floor(point.y / aStarGrid.cellSize);
+                                            
+                                            if (newX >= 0 && newX < pathfinder.gridSize && 
+                                                newY >= 0 && newY < pathfinder.gridSize &&
+                                                !(newX === pathfinder.start.x && newY === pathfinder.start.y)) {
+                                                pathfinder.end = Qt.point(newX, newY);
+                                            }
+                                        }
                                     }
 
                                     Text {
