@@ -33,104 +33,255 @@ Window {
         }
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 10
-        spacing: 10
-
-        RowLayout {
-            Layout.fillWidth: true
+    component DraggableIcon : Rectangle {
+        required property string type // "start" or "end"
+        required property point gridPos
+        required property var gridParent
+        
+        property bool isDragging: false
+        property point dragStartPos
+        property point startCellPos // 记录拖动开始时的格子位置
+        
+        width: gridParent.cellSize * 0.8
+        height: gridParent.cellSize * 0.8
+        radius: width / 2
+        color: type === "start" ? "#f39c12" : "#e74c3c"
+        border.color: "white"
+        border.width: 2
+        z: 100
+        
+        // 修复：使用格子中心点定位
+        x: (gridPos.x * gridParent.cellSize) + (gridParent.cellSize - width) / 2
+        y: (gridPos.y * gridParent.cellSize) + (gridParent.cellSize - height) / 2
+        
+        Text {
+            anchors.centerIn: parent
+            text: type === "start" ? "★" : "✖"
+            color: "white"
+            font.pixelSize: parent.height * 0.6
+            font.bold: true
+        }
+        
+        MouseArea {
+            id: dragArea
+            anchors.fill: parent
+            drag.target: parent
+            drag.axis: Drag.XAndYAxis
+            drag.minimumX: 0
+            drag.minimumY: 0
+            drag.maximumX: gridParent.width - parent.width
+            drag.maximumY: gridParent.height - parent.height
             
-            ColumnLayout {
-                Text {
-                    text: "Pathfinding Algorithms Visualizer"
-                    font.bold: true
-                    font.pixelSize: 24
-                    color: "#2c3e50"
-                }
+            onPressed: {
+                parent.isDragging = true
+                parent.dragStartPos = Qt.point(parent.x, parent.y)
+                parent.startCellPos = gridPos
+                parent.z = 1000
+            }
+            
+            onReleased: {
+                parent.isDragging = false
+                parent.z = 100
                 
-                Text {
-                    text: "Compare Dijkstra/BFS, Greedy Best-First, and A* Algorithms"
-                    font.pixelSize: 14
-                    color: "#7f8c8d"
+                // 修复：使用图标中心点计算格子位置
+                var iconCenterX = parent.x + parent.width / 2
+                var iconCenterY = parent.y + parent.height / 2
+                var newX = Math.floor(iconCenterX / gridParent.cellSize)
+                var newY = Math.floor(iconCenterY / gridParent.cellSize)
+                
+                console.log("Icon center: (" + iconCenterX + "," + iconCenterY + ")")
+                console.log("Grid cell size: " + gridParent.cellSize)
+                console.log("Calculated position: (" + newX + "," + newY + ")")
+                
+                // 确保在网格范围内
+                if (newX >= 0 && newX < pathfinder.gridSize && 
+                    newY >= 0 && newY < pathfinder.gridSize) {
+                    
+                    // 检查目标位置是否有效
+                    var targetCell = pathfinder.getDijkstraCell(newX, newY)
+                    var isValidPosition = targetCell && !targetCell.isObstacle
+                    
+                    if (isValidPosition) {
+                        // 检查不会与另一个点重叠
+                        if (type === "start") {
+                            if (!(newX === pathfinder.end.x && newY === pathfinder.end.y)) {
+                                console.log("Moving start to: (" + newX + "," + newY + ")")
+                                pathfinder.start = Qt.point(newX, newY)
+                            } else {
+                                console.log("Cannot move start to end position")
+                                isValidPosition = false
+                            }
+                        } else {
+                            if (!(newX === pathfinder.start.x && newY === pathfinder.start.y)) {
+                                console.log("Moving end to: (" + newX + "," + newY + ")")
+                                pathfinder.end = Qt.point(newX, newY)
+                            } else {
+                                console.log("Cannot move end to start position")
+                                isValidPosition = false
+                            }
+                        }
+                    } else {
+                        console.log("Target position is obstacle or invalid")
+                    }
+                    
+                    // 如果放置位置无效，回到原位置
+                    if (!isValidPosition) {
+                        if (type === "start") {
+                            parent.x = (pathfinder.start.x * gridParent.cellSize) + (gridParent.cellSize - parent.width) / 2
+                            parent.y = (pathfinder.start.y * gridParent.cellSize) + (gridParent.cellSize - parent.height) / 2
+                        } else {
+                            parent.x = (pathfinder.end.x * gridParent.cellSize) + (gridParent.cellSize - parent.width) / 2
+                            parent.y = (pathfinder.end.y * gridParent.cellSize) + (gridParent.cellSize - parent.height) / 2
+                        }
+                    }
+                } else {
+                    console.log("Position out of grid bounds")
+                    // 回到原位置
+                    if (type === "start") {
+                        parent.x = (pathfinder.start.x * gridParent.cellSize) + (gridParent.cellSize - parent.width) / 2
+                        parent.y = (pathfinder.start.y * gridParent.cellSize) + (gridParent.cellSize - parent.height) / 2
+                    } else {
+                        parent.x = (pathfinder.end.x * gridParent.cellSize) + (gridParent.cellSize - parent.width) / 2
+                        parent.y = (pathfinder.end.y * gridParent.cellSize) + (gridParent.cellSize - parent.height) / 2
+                    }
                 }
             }
             
+            // 添加拖动过程中的实时位置反馈
+            onPositionChanged: {
+                if (drag.active) {
+                    var currentCenterX = parent.x + parent.width / 2
+                    var currentCenterY = parent.y + parent.height / 2
+                    var hoverX = Math.floor(currentCenterX / gridParent.cellSize)
+                    var hoverY = Math.floor(currentCenterY / gridParent.cellSize)
+                    
+                    // 可以在这里添加视觉反馈，比如高亮悬停的格子
+                }
+            }
+        }
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 16
+        spacing: 16
+
+        // 标题区域
+        Rectangle {
+            Layout.fillWidth: true
+            height: 80
+            radius: 12
+            color: "#ffffff"
+            border.color: "#e0e0e0"
+            border.width: 1
+            
+            // 简单的阴影效果
+            Rectangle {
+                anchors.fill: parent
+                anchors.topMargin: 2
+                radius: parent.radius
+                color: "#20000000"
+                z: -1
+            }
+            
             RowLayout {
-                Layout.alignment: Qt.AlignRight
-                spacing: 15
+                anchors.fill: parent
+                anchors.margins: 16
                 
                 ColumnLayout {
+                    spacing: 4
+                    Text {
+                        text: "Pathfinding Algorithms Visualizer"
+                        font.bold: true
+                        font.pixelSize: 20
+                        color: "#2c3e50"
+                    }
+                    
+                    Text {
+                        text: "Compare Dijkstra/BFS, Greedy Best-First, and A* Algorithms"
+                        font.pixelSize: 14
+                        color: "#7f8c8d"
+                    }
+                }
+                
+                RowLayout {
                     Layout.alignment: Qt.AlignRight
+                    spacing: 20
                     
-                    Grid {
-                        columns: 3
-                        spacing: 10
+                    ColumnLayout {
+                        Layout.alignment: Qt.AlignRight
                         
-                        LegendItem { color: "#f39c12"; text: "Start" }
-                        LegendItem { color: "#e74c3c"; text: "End" }
-                        LegendItem { color: "#34495e"; text: "Wall" }
+                        Grid {
+                            columns: 3
+                            spacing: 12
+                            
+                            LegendItem { color: "#f39c12"; text: "Start" }
+                            LegendItem { color: "#e74c3c"; text: "End" }
+                            LegendItem { color: "#34495e"; text: "Wall" }
+                            
+                            LegendItem { color: "#3498db"; text: "Open Set" }
+                            LegendItem { color: "#9b59b6"; text: "Closed Set" }
+                            LegendItem { color: "#27ae60"; text: "Path" }
+                        }
+                    }
+                    
+                    // 添加交互调试按钮
+                    Button {
+                        text: "🗺️ Map Debug"
+                        font.pixelSize: 14
+                        implicitWidth: 120
+                        implicitHeight: 36
                         
-                        LegendItem { color: "#3498db"; text: "Open Set" }
-                        LegendItem { color: "#9b59b6"; text: "Closed Set" }
-                        LegendItem { color: "#27ae60"; text: "Path" }
-                    }
-                }
-                
-                // 添加交互调试按钮
-                Button {
-                    text: "🗺️ Map Debug"
-                    font.pixelSize: 16
-                    implicitWidth: 100
-                    implicitHeight: 40
-                    
-                    background: Rectangle {
-                        color: parent.pressed ? "#95a5a6" : "#bdc3c7"
-                        radius: 5
-                        border.color: "#7f8c8d"
-                        border.width: 1
-                    }
-                    
-                    contentItem: Text {
-                        text: parent.text
-                        color: "#2c3e50"
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                        background: Rectangle {
+                            color: parent.pressed ? "#95a5a6" : "#bdc3c7"
+                            radius: 6
+                            border.color: "#7f8c8d"
+                            border.width: 1
+                        }
+                        
+                        contentItem: Text {
+                            text: parent.text
+                            color: "#2c3e50"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            font.bold: true
+                        }
+                        
+                        onClicked: {
+                            console.log("=== MAP DEBUG BUTTON CLICKED ===")
+                            console.log("Current progress:", pathfinder.progress)
+                            console.log("Start position: (" + pathfinder.start.x + "," + pathfinder.start.y + ")")
+                            console.log("End position: (" + pathfinder.end.x + "," + pathfinder.end.y + ")")
+                            console.log("Grid size:", pathfinder.gridSize)
+                            console.log("Max progress:", pathfinder.maxProgress)
+                        }
                     }
                     
-                    onClicked: {
-                        console.log("=== MAP DEBUG BUTTON CLICKED ===")
-                        console.log("Current progress:", pathfinder.progress)
-                        console.log("Start position: (" + pathfinder.start.x + "," + pathfinder.start.y + ")")
-                        console.log("End position: (" + pathfinder.end.x + "," + pathfinder.end.y + ")")
-                        console.log("Grid size:", pathfinder.gridSize)
-                        console.log("Max progress:", pathfinder.maxProgress)
-                    }
-                }
-                
-                Button {
-                    text: "🔧 Algo Debug"
-                    font.pixelSize: 16
-                    implicitWidth: 100
-                    implicitHeight: 40
-                    
-                    background: Rectangle {
-                        color: parent.pressed ? "#95a5a6" : "#bdc3c7"
-                        radius: 5
-                        border.color: "#7f8c8d"
-                        border.width: 1
-                    }
-                    
-                    contentItem: Text {
-                        text: parent.text
-                        color: "#2c3e50"
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    
-                    onClicked: {
-                        console.log("=== ALGORITHM DEBUG BUTTON CLICKED ===")
-                        pathfinder.debugPrintGrids()
+                    Button {
+                        text: "🔧 Algo Debug"
+                        font.pixelSize: 14
+                        implicitWidth: 120
+                        implicitHeight: 36
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? "#95a5a6" : "#bdc3c7"
+                            radius: 6
+                            border.color: "#7f8c8d"
+                            border.width: 1
+                        }
+                        
+                        contentItem: Text {
+                            text: parent.text
+                            color: "#2c3e50"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            font.bold: true
+                        }
+                        
+                        onClicked: {
+                            console.log("=== ALGORITHM DEBUG BUTTON CLICKED ===")
+                            pathfinder.debugPrintGrids()
+                        }
                     }
                 }
             }
@@ -139,12 +290,13 @@ Window {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 10
+            spacing: 16
 
+            // Dijkstra 网格部分 - 修改为正方形容器
             ColumnLayout {
-                Layout.preferredWidth: (parent.width - 20) / 3
+                Layout.preferredWidth: (parent.width - 32) / 3
                 Layout.fillHeight: true
-                spacing: 5
+                spacing: 8
 
                 Text {
                     text: "Dijkstra/BFS (G cost)"
@@ -152,29 +304,41 @@ Window {
                     horizontalAlignment: Text.AlignHCenter
                     Layout.fillWidth: true
                     color: "#2c3e50"
-                    font.pixelSize: 14
+                    font.pixelSize: 16
                 }
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    // 关键修改：设置固定的宽高比，确保正方形
+                    Layout.preferredHeight: parent.width
                     border.color: "#34495e"
                     border.width: 2
-                    radius: 5
+                    radius: 8
                     color: "transparent"
+                    
+                    // 简单的阴影效果
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.topMargin: 2
+                        radius: parent.radius
+                        color: "#20000000"
+                        z: -1
+                    }
 
                     Item {
                         id: dijkstraGridContainer
-                        anchors.centerIn: parent
-                        width: Math.min(parent.width, parent.height) - 20
-                        height: width
+                        anchors.fill: parent
+                        anchors.margins: 12
 
                         Grid {
                             id: dijkstraGrid
-                            anchors.fill: parent
+                            anchors.centerIn: parent
                             rows: pathfinder.gridSize
                             columns: pathfinder.gridSize
-                            property real cellSize: width / pathfinder.gridSize
+                            // 关键修改：确保网格本身是正方形
+                            property real cellSize: Math.min(parent.width, parent.height) / pathfinder.gridSize
+                            width: cellSize * pathfinder.gridSize
+                            height: cellSize * pathfinder.gridSize
 
                             Repeater {
                                 id: dijkstraGridRepeater
@@ -184,18 +348,18 @@ Window {
                                     id: dijkstraCell
                                     width: dijkstraGrid.cellSize
                                     height: dijkstraGrid.cellSize
-                                    border.color: "#7f8c8d"
+                                    border.color: "#bdc3c7"
                                     border.width: 0.5
+                                    radius: 2
 
                                     property int cellX: index % pathfinder.gridSize
                                     property int cellY: Math.floor(index / pathfinder.gridSize)
                                     
-                                    // 使用直接函数调用获取数据
                                     property var cellData: pathfinder.getDijkstraCell(cellX, cellY)
 
                                     color: {
-                                        if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12";
-                                        else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "#e74c3c";
+                                        if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "transparent";
+                                        else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "transparent";
                                         else if (cellData.isObstacle) return "#34495e";
                                         else if (cellData.isFinalPath) return "#27ae60";
                                         else if (cellData.isClosed) return "#9b59b6";
@@ -203,31 +367,23 @@ Window {
                                         else return "#ecf0f1";
                                     }
 
-                                    // 修复：确保鼠标交互正常工作
                                     MouseArea {
-                                        id: dijkstraMouseArea
                                         anchors.fill: parent
-                                        enabled: pathfinder.progress === 0
                                         hoverEnabled: true
                                         
                                         onEntered: {
-                                            if (pathfinder.progress === 0) {
-                                                dijkstraCell.border.width = 2
-                                                dijkstraCell.border.color = "#e74c3c"
-                                            }
+                                            dijkstraCell.border.width = 2
+                                            dijkstraCell.border.color = "#e74c3c"
                                         }
                                         
                                         onExited: {
                                             dijkstraCell.border.width = 0.5
-                                            dijkstraCell.border.color = "#7f8c8d"
+                                            dijkstraCell.border.color = "#bdc3c7"
                                         }
                                         
                                         onClicked: {
                                             console.log("=== DIJKSTRA CELL CLICKED ===")
                                             console.log("Cell coordinates: (" + cellX + "," + cellY + ")")
-                                            console.log("Current progress: " + pathfinder.progress)
-                                            console.log("Start position: (" + pathfinder.start.x + "," + pathfinder.start.y + ")")
-                                            console.log("End position: (" + pathfinder.end.x + "," + pathfinder.end.y + ")")
                                             
                                             if (!(cellX === pathfinder.start.x && cellY === pathfinder.start.y) &&
                                                 !(cellX === pathfinder.end.x && cellY === pathfinder.end.y)) {
@@ -237,93 +393,12 @@ Window {
                                                 console.log("Cell is start or end position, skipping toggle")
                                             }
                                         }
-                                        
-                                        onPressed: {
-                                            console.log("Mouse pressed on cell (" + cellX + "," + cellY + ")")
-                                            if (pathfinder.progress === 0) {
-                                                if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) {
-                                                    console.log("Starting start drag...")
-                                                    drag.target = dijkstraStartDrag;
-                                                } else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) {
-                                                    console.log("Starting end drag...")
-                                                    drag.target = dijkstraEndDrag;
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // 起点拖动
-                                    Item {
-                                        id: dijkstraStartDrag
-                                        x: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
-                                        y: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
-                                        width: dijkstraCell.width
-                                        height: dijkstraCell.height
-                                        
-                                        Drag.active: dijkstraMouseArea.drag.active && 
-                                                    cellX === pathfinder.start.x && cellY === pathfinder.start.y
-                                        Drag.hotSpot.x: width / 2
-                                        Drag.hotSpot.y: height / 2
-                                        
-                                        onXChanged: if (Drag.active) updatePosition()
-                                        onYChanged: if (Drag.active) updatePosition()
-                                        
-                                        function updatePosition() {
-                                            if (pathfinder.progress !== 0) return;
-                                            
-                                            var point = dijkstraCell.mapToItem(dijkstraGrid, dijkstraStartDrag.x + width/2, dijkstraStartDrag.y + height/2);
-                                            var newX = Math.floor(point.x / dijkstraGrid.cellSize);
-                                            var newY = Math.floor(point.y / dijkstraGrid.cellSize);
-                                            
-                                            console.log("Updating start position to: (" + newX + "," + newY + ")")
-                                            
-                                            if (newX >= 0 && newX < pathfinder.gridSize && 
-                                                newY >= 0 && newY < pathfinder.gridSize &&
-                                                !(newX === pathfinder.end.x && newY === pathfinder.end.y)) {
-                                                pathfinder.start = Qt.point(newX, newY);
-                                            }
-                                        }
-                                    }
-
-                                    // 终点拖动
-                                    Item {
-                                        id: dijkstraEndDrag
-                                        x: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
-                                        y: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
-                                        width: dijkstraCell.width
-                                        height: dijkstraCell.height
-                                        
-                                        Drag.active: dijkstraMouseArea.drag.active && 
-                                                    cellX === pathfinder.end.x && cellY === pathfinder.end.y
-                                        Drag.hotSpot.x: width / 2
-                                        Drag.hotSpot.y: height / 2
-                                        
-                                        onXChanged: if (Drag.active) updatePosition()
-                                        onYChanged: if (Drag.active) updatePosition()
-                                        
-                                        function updatePosition() {
-                                            if (pathfinder.progress !== 0) return;
-                                            
-                                            var point = dijkstraCell.mapToItem(dijkstraGrid, dijkstraEndDrag.x + width/2, dijkstraEndDrag.y + height/2);
-                                            var newX = Math.floor(point.x / dijkstraGrid.cellSize);
-                                            var newY = Math.floor(point.y / dijkstraGrid.cellSize);
-                                            
-                                            console.log("Updating end position to: (" + newX + "," + newY + ")")
-                                            
-                                            if (newX >= 0 && newX < pathfinder.gridSize && 
-                                                newY >= 0 && newY < pathfinder.gridSize &&
-                                                !(newX === pathfinder.start.x && newY === pathfinder.start.y)) {
-                                                pathfinder.end = Qt.point(newX, newY);
-                                            }
-                                        }
                                     }
 
                                     Text {
                                         anchors.centerIn: parent
                                         text: {
-                                            if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "★";
-                                            else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "✖";
-                                            else if (cellData.isObstacle) return "█";
+                                            if (cellData.isObstacle) return "█";
                                             else if (cellData.isOpen || cellData.isClosed) {
                                                 return cellData.g > 0 && cellData.g < 999 ? cellData.g : "";
                                             }
@@ -332,18 +407,37 @@ Window {
                                         font.pixelSize: Math.min(dijkstraCell.width, dijkstraCell.height) * 0.4
                                         color: "white"
                                         font.bold: true
+                                        visible: !(cellX === pathfinder.start.x && cellY === pathfinder.start.y) && 
+                                                !(cellX === pathfinder.end.x && cellY === pathfinder.end.y)
                                     }
                                 }
                             }
+                        }
+
+                        // 起点图标
+                        DraggableIcon {
+                            id: dijkstraStartIcon
+                            type: "start"
+                            gridPos: pathfinder.start
+                            gridParent: dijkstraGrid
+                        }
+
+                        // 终点图标
+                        DraggableIcon {
+                            id: dijkstraEndIcon
+                            type: "end"
+                            gridPos: pathfinder.end
+                            gridParent: dijkstraGrid
                         }
                     }
                 }
             }
 
+            // Greedy 网格部分 - 修改为正方形容器
             ColumnLayout {
-                Layout.preferredWidth: (parent.width - 20) / 3
+                Layout.preferredWidth: (parent.width - 32) / 3
                 Layout.fillHeight: true
-                spacing: 5
+                spacing: 8
 
                 Text {
                     text: "Greedy Best-First (H cost)"
@@ -351,41 +445,53 @@ Window {
                     horizontalAlignment: Text.AlignHCenter
                     Layout.fillWidth: true
                     color: "#2c3e50"
-                    font.pixelSize: 14
+                    font.pixelSize: 16
                 }
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    // 关键修改：设置固定的宽高比，确保正方形
+                    Layout.preferredHeight: parent.width
                     border.color: "#34495e"
                     border.width: 2
-                    radius: 5
+                    radius: 8
                     color: "transparent"
+                    
+                    // 简单的阴影效果
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.topMargin: 2
+                        radius: parent.radius
+                        color: "#20000000"
+                        z: -1
+                    }
 
                     Item {
                         id: greedyGridContainer
-                        anchors.centerIn: parent
-                        width: Math.min(parent.width, parent.height) - 20
-                        height: width
+                        anchors.fill: parent
+                        anchors.margins: 12
 
                         Grid {
                             id: greedyGrid
-                            anchors.fill: parent
+                            anchors.centerIn: parent
                             rows: pathfinder.gridSize
                             columns: pathfinder.gridSize
-                            property real cellSize: width / pathfinder.gridSize
+                            // 关键修改：确保网格本身是正方形
+                            property real cellSize: Math.min(parent.width, parent.height) / pathfinder.gridSize
+                            width: cellSize * pathfinder.gridSize
+                            height: cellSize * pathfinder.gridSize
 
                             Repeater {
                                 id: greedyGridRepeater
                                 model: pathfinder.gridSize * pathfinder.gridSize
                                 
-                                // Greedy 网格 delegate - 简化颜色逻辑
                                 delegate: Rectangle {
                                     id: greedyCell
                                     width: greedyGrid.cellSize
                                     height: greedyGrid.cellSize
-                                    border.color: "#7f8c8d"
+                                    border.color: "#bdc3c7"
                                     border.width: 0.5
+                                    radius: 2
 
                                     property int cellX: index % pathfinder.gridSize
                                     property int cellY: Math.floor(index / pathfinder.gridSize)
@@ -393,10 +499,10 @@ Window {
                                     property var cellData: pathfinder.getGreedyCell(cellX, cellY)
 
                                     color: {
-                                        if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12";
-                                        else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "#e74c3c";
+                                        if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "transparent";
+                                        else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "transparent";
                                         else if (cellData.isObstacle) return "#34495e";
-                                        else if (cellData.isFinalPath) return "#27ae60";  // 只显示最终路径
+                                        else if (cellData.isFinalPath) return "#27ae60";
                                         else if (cellData.isClosed) return "#9b59b6";
                                         else if (cellData.isOpen) return "#3498db";
                                         else return "#ecf0f1";
@@ -404,80 +510,28 @@ Window {
 
                                     MouseArea {
                                         anchors.fill: parent
-                                        enabled: pathfinder.progress === 0
+                                        hoverEnabled: true
+                                        
+                                        onEntered: {
+                                            greedyCell.border.width = 2
+                                            greedyCell.border.color = "#e74c3c"
+                                        }
+                                        
+                                        onExited: {
+                                            greedyCell.border.width = 0.5
+                                            greedyCell.border.color = "#bdc3c7"
+                                        }
+                                        
                                         onClicked: {
-                                            console.log("Cell clicked: (" + cellX + "," + cellY + ")")
+                                            console.log("=== GREEDY CELL CLICKED ===")
+                                            console.log("Cell coordinates: (" + cellX + "," + cellY + ")")
+                                            
                                             if (!(cellX === pathfinder.start.x && cellY === pathfinder.start.y) &&
                                                 !(cellX === pathfinder.end.x && cellY === pathfinder.end.y)) {
-                                                console.log("Toggling obstacle at: (" + cellX + "," + cellY + ")")
+                                                console.log("Calling toggleObstacle...")
                                                 pathfinder.toggleObstacle(cellX, cellY);
-                                            }
-                                        }
-                                        onPressed: {
-                                            if (pathfinder.progress === 0) {
-                                                if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) {
-                                                    drag.target = greedyStartDrag;
-                                                } else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) {
-                                                    drag.target = greedyEndDrag;
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Item {
-                                        id: greedyStartDrag
-                                        x: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
-                                        y: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
-                                        width: greedyCell.width
-                                        height: greedyCell.height
-                                        
-                                        Drag.active: greedyStartDrag.Drag.active
-                                        Drag.hotSpot.x: width / 2
-                                        Drag.hotSpot.y: height / 2
-                                        
-                                        onXChanged: if (Drag.active) updatePosition()
-                                        onYChanged: if (Drag.active) updatePosition()
-                                        
-                                        function updatePosition() {
-                                            if (pathfinder.progress !== 0) return;
-                                            
-                                            var point = greedyCell.mapToItem(greedyGrid, greedyStartDrag.x + width/2, greedyStartDrag.y + height/2);
-                                            var newX = Math.floor(point.x / greedyGrid.cellSize);
-                                            var newY = Math.floor(point.y / greedyGrid.cellSize);
-                                            
-                                            if (newX >= 0 && newX < pathfinder.gridSize && 
-                                                newY >= 0 && newY < pathfinder.gridSize &&
-                                                !(newX === pathfinder.end.x && newY === pathfinder.end.y)) {
-                                                pathfinder.start = Qt.point(newX, newY);
-                                            }
-                                        }
-                                    }
-
-                                    Item {
-                                        id: greedyEndDrag
-                                        x: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
-                                        y: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
-                                        width: greedyCell.width
-                                        height: greedyCell.height
-                                        
-                                        Drag.active: greedyEndDrag.Drag.active
-                                        Drag.hotSpot.x: width / 2
-                                        Drag.hotSpot.y: height / 2
-                                        
-                                        onXChanged: if (Drag.active) updatePosition()
-                                        onYChanged: if (Drag.active) updatePosition()
-                                        
-                                        function updatePosition() {
-                                            if (pathfinder.progress !== 0) return;
-                                            
-                                            var point = greedyCell.mapToItem(greedyGrid, greedyEndDrag.x + width/2, greedyEndDrag.y + height/2);
-                                            var newX = Math.floor(point.x / greedyGrid.cellSize);
-                                            var newY = Math.floor(point.y / greedyGrid.cellSize);
-                                            
-                                            if (newX >= 0 && newX < pathfinder.gridSize && 
-                                                newY >= 0 && newY < pathfinder.gridSize &&
-                                                !(newX === pathfinder.start.x && newY === pathfinder.start.y)) {
-                                                pathfinder.end = Qt.point(newX, newY);
+                                            } else {
+                                                console.log("Cell is start or end position, skipping toggle")
                                             }
                                         }
                                     }
@@ -485,9 +539,7 @@ Window {
                                     Text {
                                         anchors.centerIn: parent
                                         text: {
-                                            if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "★";
-                                            else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "✖";
-                                            else if (cellData.isObstacle) return "█";
+                                            if (cellData.isObstacle) return "█";
                                             else if (cellData.isOpen || cellData.isClosed) {
                                                 return cellData.h > 0 ? cellData.h : "";
                                             }
@@ -496,18 +548,37 @@ Window {
                                         font.pixelSize: Math.min(greedyCell.width, greedyCell.height) * 0.4
                                         color: "white"
                                         font.bold: true
+                                        visible: !(cellX === pathfinder.start.x && cellY === pathfinder.start.y) && 
+                                                !(cellX === pathfinder.end.x && cellY === pathfinder.end.y)
                                     }
                                 }
                             }
+                        }
+
+                        // 起点图标
+                        DraggableIcon {
+                            id: greedyStartIcon
+                            type: "start"
+                            gridPos: pathfinder.start
+                            gridParent: greedyGrid
+                        }
+
+                        // 终点图标
+                        DraggableIcon {
+                            id: greedyEndIcon
+                            type: "end"
+                            gridPos: pathfinder.end
+                            gridParent: greedyGrid
                         }
                     }
                 }
             }
 
+            // A* 网格部分 - 修改为正方形容器
             ColumnLayout {
-                Layout.preferredWidth: (parent.width - 20) / 3
+                Layout.preferredWidth: (parent.width - 32) / 3
                 Layout.fillHeight: true
-                spacing: 5
+                spacing: 8
 
                 Text {
                     text: "A* (F cost)"
@@ -515,41 +586,53 @@ Window {
                     horizontalAlignment: Text.AlignHCenter
                     Layout.fillWidth: true
                     color: "#2c3e50"
-                    font.pixelSize: 14
+                    font.pixelSize: 16
                 }
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    // 关键修改：设置固定的宽高比，确保正方形
+                    Layout.preferredHeight: parent.width
                     border.color: "#34495e"
                     border.width: 2
-                    radius: 5
+                    radius: 8
                     color: "transparent"
+                    
+                    // 简单的阴影效果
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.topMargin: 2
+                        radius: parent.radius
+                        color: "#20000000"
+                        z: -1
+                    }
 
                     Item {
                         id: aStarGridContainer
-                        anchors.centerIn: parent
-                        width: Math.min(parent.width, parent.height) - 20
-                        height: width
+                        anchors.fill: parent
+                        anchors.margins: 12
 
                         Grid {
                             id: aStarGrid
-                            anchors.fill: parent
+                            anchors.centerIn: parent
                             rows: pathfinder.gridSize
                             columns: pathfinder.gridSize
-                            property real cellSize: width / pathfinder.gridSize
+                            // 关键修改：确保网格本身是正方形
+                            property real cellSize: Math.min(parent.width, parent.height) / pathfinder.gridSize
+                            width: cellSize * pathfinder.gridSize
+                            height: cellSize * pathfinder.gridSize
 
                             Repeater {
                                 id: aStarGridRepeater
                                 model: pathfinder.gridSize * pathfinder.gridSize
                                 
-                                // A* 网格 delegate - 简化颜色逻辑
                                 delegate: Rectangle {
                                     id: aStarCell
                                     width: aStarGrid.cellSize
                                     height: aStarGrid.cellSize
-                                    border.color: "#7f8c8d"
+                                    border.color: "#bdc3c7"
                                     border.width: 0.5
+                                    radius: 2
 
                                     property int cellX: index % pathfinder.gridSize
                                     property int cellY: Math.floor(index / pathfinder.gridSize)
@@ -557,10 +640,10 @@ Window {
                                     property var cellData: pathfinder.getAStarCell(cellX, cellY)
 
                                     color: {
-                                        if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "#f39c12";
-                                        else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "#e74c3c";
+                                        if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "transparent";
+                                        else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "transparent";
                                         else if (cellData.isObstacle) return "#34495e";
-                                        else if (cellData.isFinalPath) return "#27ae60";  // 只显示最终路径
+                                        else if (cellData.isFinalPath) return "#27ae60";
                                         else if (cellData.isClosed) return "#9b59b6";
                                         else if (cellData.isOpen) return "#3498db";
                                         else return "#ecf0f1";
@@ -568,80 +651,28 @@ Window {
 
                                     MouseArea {
                                         anchors.fill: parent
-                                        enabled: pathfinder.progress === 0
+                                        hoverEnabled: true
+                                        
+                                        onEntered: {
+                                            aStarCell.border.width = 2
+                                            aStarCell.border.color = "#e74c3c"
+                                        }
+                                        
+                                        onExited: {
+                                            aStarCell.border.width = 0.5
+                                            aStarCell.border.color = "#bdc3c7"
+                                        }
+                                        
                                         onClicked: {
-                                            console.log("Cell clicked: (" + cellX + "," + cellY + ")")
+                                            console.log("=== A* CELL CLICKED ===")
+                                            console.log("Cell coordinates: (" + cellX + "," + cellY + ")")
+                                            
                                             if (!(cellX === pathfinder.start.x && cellY === pathfinder.start.y) &&
                                                 !(cellX === pathfinder.end.x && cellY === pathfinder.end.y)) {
-                                                console.log("Toggling obstacle at: (" + cellX + "," + cellY + ")")
+                                                console.log("Calling toggleObstacle...")
                                                 pathfinder.toggleObstacle(cellX, cellY);
-                                            }
-                                        }
-                                        onPressed: {
-                                            if (pathfinder.progress === 0) {
-                                                if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) {
-                                                    drag.target = aStarStartDrag;
-                                                } else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) {
-                                                    drag.target = aStarEndDrag;
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Item {
-                                        id: aStarStartDrag
-                                        x: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
-                                        y: cellX === pathfinder.start.x && cellY === pathfinder.start.y ? 0 : -1000
-                                        width: aStarCell.width
-                                        height: aStarCell.height
-                                        
-                                        Drag.active: aStarStartDrag.Drag.active
-                                        Drag.hotSpot.x: width / 2
-                                        Drag.hotSpot.y: height / 2
-                                        
-                                        onXChanged: if (Drag.active) updatePosition()
-                                        onYChanged: if (Drag.active) updatePosition()
-                                        
-                                        function updatePosition() {
-                                            if (pathfinder.progress !== 0) return;
-                                            
-                                            var point = aStarCell.mapToItem(aStarGrid, aStarStartDrag.x + width/2, aStarStartDrag.y + height/2);
-                                            var newX = Math.floor(point.x / aStarGrid.cellSize);
-                                            var newY = Math.floor(point.y / aStarGrid.cellSize);
-                                            
-                                            if (newX >= 0 && newX < pathfinder.gridSize && 
-                                                newY >= 0 && newY < pathfinder.gridSize &&
-                                                !(newX === pathfinder.end.x && newY === pathfinder.end.y)) {
-                                                pathfinder.start = Qt.point(newX, newY);
-                                            }
-                                        }
-                                    }
-
-                                    Item {
-                                        id: aStarEndDrag
-                                        x: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
-                                        y: cellX === pathfinder.end.x && cellY === pathfinder.end.y ? 0 : -1000
-                                        width: aStarCell.width
-                                        height: aStarCell.height
-                                        
-                                        Drag.active: aStarEndDrag.Drag.active
-                                        Drag.hotSpot.x: width / 2
-                                        Drag.hotSpot.y: height / 2
-                                        
-                                        onXChanged: if (Drag.active) updatePosition()
-                                        onYChanged: if (Drag.active) updatePosition()
-                                        
-                                        function updatePosition() {
-                                            if (pathfinder.progress !== 0) return;
-                                            
-                                            var point = aStarCell.mapToItem(aStarGrid, aStarEndDrag.x + width/2, aStarEndDrag.y + height/2);
-                                            var newX = Math.floor(point.x / aStarGrid.cellSize);
-                                            var newY = Math.floor(point.y / aStarGrid.cellSize);
-                                            
-                                            if (newX >= 0 && newX < pathfinder.gridSize && 
-                                                newY >= 0 && newY < pathfinder.gridSize &&
-                                                !(newX === pathfinder.start.x && newY === pathfinder.start.y)) {
-                                                pathfinder.end = Qt.point(newX, newY);
+                                            } else {
+                                                console.log("Cell is start or end position, skipping toggle")
                                             }
                                         }
                                     }
@@ -649,9 +680,7 @@ Window {
                                     Text {
                                         anchors.centerIn: parent
                                         text: {
-                                            if (cellX === pathfinder.start.x && cellY === pathfinder.start.y) return "★";
-                                            else if (cellX === pathfinder.end.x && cellY === pathfinder.end.y) return "✖";
-                                            else if (cellData.isObstacle) return "█";
+                                            if (cellData.isObstacle) return "█";
                                             else if (cellData.isOpen || cellData.isClosed) {
                                                 return cellData.f > 0 && cellData.f < 999 ? cellData.f : "";
                                             }
@@ -660,103 +689,169 @@ Window {
                                         font.pixelSize: Math.min(aStarCell.width, aStarCell.height) * 0.4
                                         color: "white"
                                         font.bold: true
+                                        visible: !(cellX === pathfinder.start.x && cellY === pathfinder.start.y) && 
+                                                !(cellX === pathfinder.end.x && cellY === pathfinder.end.y)
                                     }
                                 }
                             }
+                        }
+
+                        // 起点图标
+                        DraggableIcon {
+                            id: aStarStartIcon
+                            type: "start"
+                            gridPos: pathfinder.start
+                            gridParent: aStarGrid
+                        }
+
+                        // 终点图标
+                        DraggableIcon {
+                            id: aStarEndIcon
+                            type: "end"
+                            gridPos: pathfinder.end
+                            gridParent: aStarGrid
                         }
                     }
                 }
             }
         }
 
-        ColumnLayout {
+        // 进度控制区域
+        Rectangle {
             Layout.fillWidth: true
-            spacing: 5
-
-            Text {
-                text: `Step ${pathfinder.progress} of ${pathfinder.maxProgress}`
-                font.bold: true
-                color: "#2c3e50"
-                Layout.alignment: Qt.AlignHCenter
-                font.pixelSize: 16
+            height: 120
+            radius: 12
+            color: "#ffffff"
+            border.color: "#e0e0e0"
+            border.width: 1
+            
+            // 简单的阴影效果
+            Rectangle {
+                anchors.fill: parent
+                anchors.topMargin: 2
+                radius: parent.radius
+                color: "#20000000"
+                z: -1
             }
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 12
 
-            Slider {
-                id: progressBar
-                Layout.fillWidth: true
-                from: 0
-                to: pathfinder.maxProgress
-                value: pathfinder.progress
-                stepSize: 1
-                snapMode: Slider.SnapAlways
-                
-                onMoved: {
-                    pathfinder.progress = value
+                Text {
+                    text: `Step ${pathfinder.progress} of ${pathfinder.maxProgress}`
+                    font.bold: true
+                    color: "#2c3e50"
+                    Layout.alignment: Qt.AlignHCenter
+                    font.pixelSize: 16
                 }
 
-                background: Rectangle {
-                    implicitHeight: 8
-                    color: "#bdc3c7"
-                    radius: 4
+                Slider {
+                    id: progressBar
+                    Layout.fillWidth: true
+                    from: 0
+                    to: pathfinder.maxProgress
+                    value: pathfinder.progress
+                    stepSize: 1
+                    snapMode: Slider.SnapAlways
+                    
+                    onMoved: {
+                        // 如果处于自动前进状态，停止它
+                        if (pathfinder.isRunning) {
+                            pathfinder.stopSimulation()
+                        }
+                        pathfinder.progress = value
+                    }
 
-                    Rectangle {
-                        width: progressBar.visualPosition * parent.width
-                        height: parent.height
-                        color: "#3498db"
+                    // 添加按下和释放事件处理
+                    onPressedChanged: {
+                        if (pressed && pathfinder.isRunning) {
+                            pathfinder.stopSimulation()
+                        }
+                    }
+
+                    background: Rectangle {
+                        implicitHeight: 8
+                        color: "#bdc3c7"
                         radius: 4
+
+                        Rectangle {
+                            width: progressBar.visualPosition * parent.width
+                            height: parent.height
+                            color: "#3498db"
+                            radius: 4
+                        }
+                    }
+
+                    handle: Rectangle {
+                        x: progressBar.leftPadding + progressBar.visualPosition * (progressBar.availableWidth - width)
+                        y: progressBar.topPadding + progressBar.availableHeight / 2 - height / 2
+                        implicitWidth: 24
+                        implicitHeight: 24
+                        radius: 12
+                        color: progressBar.pressed ? "#2980b9" : "#3498db"
+                        border.color: "#2c3e50"
+                        border.width: 2
                     }
                 }
 
-                handle: Rectangle {
-                    x: progressBar.leftPadding + progressBar.visualPosition * (progressBar.availableWidth - width)
-                    y: progressBar.topPadding + progressBar.availableHeight / 2 - height / 2
-                    implicitWidth: 24
-                    implicitHeight: 24
-                    radius: 12
-                    color: progressBar.pressed ? "#2980b9" : "#3498db"
-                    border.color: "#2c3e50"
-                    border.width: 2
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 12
+
+                    ControlButton {
+                        text: "⏪ Step Back"
+                        onClicked: {
+                            // 如果处于自动前进状态，停止它
+                            if (pathfinder.isRunning) {
+                                pathfinder.stopSimulation()
+                            }
+                            pathfinder.stepBackward()
+                        }
+                        enabled: pathfinder.progress > 0
+                        backgroundColor: "#3498db"
+                    }
+
+                    ControlButton {
+                        text: pathfinder.isRunning ? "⏹ Stop" : "▶ Start"
+                        onClicked: pathfinder.isRunning ? pathfinder.stopSimulation() : pathfinder.startSimulation()
+                        backgroundColor: pathfinder.isRunning ? "#e74c3c" : "#27ae60"
+                    }
+
+                    ControlButton {
+                        text: "Step Forward ⏩"
+                        onClicked: {
+                            // 如果处于自动前进状态，停止它
+                            if (pathfinder.isRunning) {
+                                pathfinder.stopSimulation()
+                            }
+                            pathfinder.stepForward()
+                        }
+                        enabled: pathfinder.progress < pathfinder.maxProgress
+                        backgroundColor: "#3498db"
+                    }
+
+                    ControlButton {
+                        text: "🗑️ Clear Walls"
+                        onClicked: pathfinder.clearAllObstacles()
+                        backgroundColor: "#e67e22"
+                    }
+
+                    ControlButton {
+                        text: "🔄 Reset"
+                        onClicked: pathfinder.resetSimulation()
+                        backgroundColor: "#f39c12"
+                    }
                 }
             }
         }
 
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 15
-
-            ControlButton {
-                text: "⏪ Step Back"
-                onClicked: pathfinder.stepBackward()
-                enabled: pathfinder.progress > 0
-                backgroundColor: "#3498db"
-            }
-
-            ControlButton {
-                text: pathfinder.isRunning ? "⏹ Stop" : "▶ Start"
-                onClicked: pathfinder.isRunning ? pathfinder.stopSimulation() : pathfinder.startSimulation()
-                backgroundColor: pathfinder.isRunning ? "#e74c3c" : "#27ae60"
-            }
-
-            ControlButton {
-                text: "Step Forward ⏩"
-                onClicked: pathfinder.stepForward()
-                enabled: pathfinder.progress < pathfinder.maxProgress
-                backgroundColor: "#3498db"
-            }
-
-            ControlButton {
-                text: "🔄 Reset"
-                onClicked: pathfinder.resetSimulation()
-                backgroundColor: "#f39c12"
-            }
-        }
-
+        // 提示文本
         Text {
-            text: pathfinder.progress === 0 ? 
-                  "💡 Click to toggle walls • Drag ★ and ✖ to move start/end points" :
-                  "💡 Reset to step 0 to modify the map"
+            text: "💡 Click any grid to toggle walls • Drag ★ and ✖ icons to move start/end points • Use 'Clear Walls' to remove all obstacles"
             font.pixelSize: 12
-            color: pathfinder.progress === 0 ? "#27ae60" : "#e74c3c"
+            color: "#27ae60"
             font.italic: true
             Layout.alignment: Qt.AlignHCenter
         }
@@ -766,14 +861,15 @@ Window {
         required property color color
         required property string text
         
-        spacing: 5
+        spacing: 8
         
         Rectangle {
             width: 16
             height: 16
             color: parent.color
+            radius: 3
             border.width: 1
-            border.color: "#000000"
+            border.color: "#bdc3c7"
         }
         
         Text {

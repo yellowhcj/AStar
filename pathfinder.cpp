@@ -41,6 +41,9 @@ Pathfinder::Pathfinder(QObject *parent)
             stopSimulation();
         }
     });
+    
+    // 设置定时器间隔为50ms
+    m_simulationTimer->setInterval(50);
 }
 
 int Pathfinder::gridSize() const {
@@ -86,7 +89,19 @@ void Pathfinder::setStart(const QPoint &point) {
         m_start = point;
         m_needsRecomputation = true;
         std::cout << "✅ Start position updated" << std::endl;
+        
+        // 保存当前进度
+        int oldProgress = m_progress;
+        
         recomputeAllAlgorithms();
+        
+        // 如果旧进度大于新最大进度，跳到最后一步
+        if (oldProgress > m_maxProgress) {
+            setProgress(m_maxProgress);
+        } else {
+            setProgress(oldProgress);
+        }
+        
         emit startChanged();
     } else {
         std::cout << "❌ Cannot set start - invalid conditions" << std::endl;
@@ -113,7 +128,19 @@ void Pathfinder::setEnd(const QPoint &point) {
         m_end = point;
         m_needsRecomputation = true;
         std::cout << "✅ End position updated" << std::endl;
+        
+        // 保存当前进度
+        int oldProgress = m_progress;
+        
         recomputeAllAlgorithms();
+        
+        // 如果旧进度大于新最大进度，跳到最后一步
+        if (oldProgress > m_maxProgress) {
+            setProgress(m_maxProgress);
+        } else {
+            setProgress(oldProgress);
+        }
+        
         emit endChanged();
     } else {
         std::cout << "❌ Cannot set end - invalid conditions" << std::endl;
@@ -155,8 +182,8 @@ void Pathfinder::toggleObstacle(int x, int y) {
     std::cout << "End position: (" << m_end.x() << "," << m_end.y() << ")" << std::endl;
     std::cout << "Grid bounds: 0 to " << m_gridSize-1 << std::endl;
     
-    if (m_progress == 0 &&
-        x >= 0 && x < m_gridSize && y >= 0 && y < m_gridSize &&
+    // 移除进度限制，允许在任何步骤修改
+    if (x >= 0 && x < m_gridSize && y >= 0 && y < m_gridSize &&
         !(x == m_start.x() && y == m_start.y()) && 
         !(x == m_end.x() && y == m_end.y())) {
         
@@ -165,10 +192,22 @@ void Pathfinder::toggleObstacle(int x, int y) {
         std::cout << "✅ Obstacle toggled at (" << x << "," << y << ") to: " << newState << std::endl;
         
         m_needsRecomputation = true;
+        
+        // 保存当前进度
+        int oldProgress = m_progress;
+        
+        // 重新计算所有算法
         recomputeAllAlgorithms();
+        
+        // 如果旧进度大于新最大进度，跳到最后一步
+        if (oldProgress > m_maxProgress) {
+            setProgress(m_maxProgress);
+        } else {
+            // 否则保持当前进度（重新计算会重置为0，需要恢复）
+            setProgress(oldProgress);
+        }
     } else {
         std::cout << "❌ Cannot toggle obstacle - invalid conditions:" << std::endl;
-        if (m_progress != 0) std::cout << "  - Progress is not 0" << std::endl;
         if (x < 0 || x >= m_gridSize || y < 0 || y >= m_gridSize) 
             std::cout << "  - Coordinates out of bounds" << std::endl;
         if (x == m_start.x() && y == m_start.y()) 
@@ -250,6 +289,33 @@ void Pathfinder::resetSimulation() {
     
     std::cout << "Simulation reset to progress 0" << std::endl;
     std::cout << "Needs recomputation after reset: " << m_needsRecomputation << std::endl;
+}
+
+void Pathfinder::clearAllObstacles() {
+    std::cout << "=== CLEAR ALL OBSTACLES CALLED ===" << std::endl;
+    
+    // 移除进度限制
+    for (int y = 0; y < m_gridSize; ++y) {
+        for (int x = 0; x < m_gridSize; ++x) {
+            m_obstacles[y][x] = false;
+        }
+    }
+    
+    m_needsRecomputation = true;
+    
+    // 保存当前进度
+    int oldProgress = m_progress;
+    
+    recomputeAllAlgorithms();
+    
+    // 如果旧进度大于新最大进度，跳到最后一步
+    if (oldProgress > m_maxProgress) {
+        setProgress(m_maxProgress);
+    } else {
+        setProgress(oldProgress);
+    }
+    
+    std::cout << "✅ All obstacles cleared" << std::endl;
 }
 
 void Pathfinder::debugPrintGrids() {
@@ -417,16 +483,16 @@ void Pathfinder::initializeGrids() {
     // 清空路径和步骤
     m_dijkstraState.finalPath.clear();
     m_dijkstraState.stepGrids.clear();
-    m_dijkstraState.stepPaths.clear();      // 清空stepPaths
-    m_dijkstraState.stepFinalPaths.clear(); // 清空stepFinalPaths
+    m_dijkstraState.stepPaths.clear();
+    m_dijkstraState.stepFinalPaths.clear();
     m_greedyState.finalPath.clear();
     m_greedyState.stepGrids.clear();
-    m_greedyState.stepPaths.clear();        // 清空stepPaths
-    m_greedyState.stepFinalPaths.clear();   // 清空stepFinalPaths
+    m_greedyState.stepPaths.clear();
+    m_greedyState.stepFinalPaths.clear();
     m_aStarState.finalPath.clear();
     m_aStarState.stepGrids.clear();
-    m_aStarState.stepPaths.clear();         // 清空stepPaths
-    m_aStarState.stepFinalPaths.clear();    // 清空stepFinalPaths
+    m_aStarState.stepPaths.clear();
+    m_aStarState.stepFinalPaths.clear();
     
     m_dijkstraState.finished = false;
     m_greedyState.finished = false;
@@ -477,9 +543,7 @@ void Pathfinder::initializeGrids() {
 void Pathfinder::recomputeAllAlgorithms() {
     std::cout << "\n*** RECOMPUTING ALL ALGORITHMS ***" << std::endl;
     
-    // 保存当前进度
-    int savedProgress = m_progress;
-    
+    // 完全重置所有状态
     initializeGrids();
     
     std::cout << "Computing Dijkstra..." << std::endl;
@@ -503,8 +567,8 @@ void Pathfinder::recomputeAllAlgorithms() {
     m_maxProgress = qMax(dijkstraSteps, qMax(greedySteps, aStarSteps)) - 1;
     if (m_maxProgress < 0) m_maxProgress = 0;
     
-    // 恢复进度，但确保不超过新的最大进度
-    m_progress = qMin(savedProgress, m_maxProgress);
+    // 修复：重新计算后总是重置进度为0
+    m_progress = 0;
     
     // 重置需要重新计算的标志
     m_needsRecomputation = false;
@@ -525,8 +589,8 @@ void Pathfinder::computeAlgorithm(AlgorithmState& state, const std::function<int
     std::cout << "=== ENTERING computeAlgorithm ===" << std::endl;
     std::cout << "Algorithm type: " << (useG ? (heuristicFunc(0,0,0,0)==0 ? "Dijkstra" : "A*") : "Greedy") << std::endl;
     
-    // 修复：使用合理的最大步数，而不是固定值
-    int maxSteps = m_gridSize * m_gridSize;  // 最大步数应该是网格大小的平方
+    // 修复：使用合理的最大步数
+    int maxSteps = m_gridSize * m_gridSize * 2;  // 增加最大步数限制
     int stepCount = 0;
     
     // 主要算法循环
@@ -548,6 +612,7 @@ void Pathfinder::computeAlgorithm(AlgorithmState& state, const std::function<int
             
             // 记录最终状态
             state.stepGrids.append(deepCopyGrid(state.grid));
+            std::cout << "Final state recorded at step " << state.stepGrids.size() << std::endl;
             break;
         }
         
@@ -593,9 +658,7 @@ void Pathfinder::computeAlgorithm(AlgorithmState& state, const std::function<int
     }
     
     // 如果算法没有找到路径但已经完成，也要确保状态一致
-    if (state.finished) {
-        std::cout << "Algorithm finished successfully in " << stepCount << " steps" << std::endl;
-    } else {
+    if (!state.finished) {
         std::cout << "Algorithm stopped after " << stepCount << " steps without finding path" << std::endl;
         // 如果没有找到路径，也要记录最终状态
         state.stepGrids.append(deepCopyGrid(state.grid));
@@ -709,19 +772,21 @@ QVariantMap Pathfinder::cellToVariantMap(const Cell& cell, bool inFinalPath) con
     return cellData;
 }
 
-// 修改：获取Dijkstra单元格数据，改进最终路径显示逻辑
+// 修改 getDijkstraCell 方法，确保显示当前步骤的状态
 QVariantMap Pathfinder::getDijkstraCell(int x, int y) const {
     if (x < 0 || x >= m_gridSize || y < 0 || y >= m_gridSize) {
         return QVariantMap();
     }
     
-    if (m_progress < m_dijkstraState.stepGrids.size()) {
-        const auto& grid = m_dijkstraState.stepGrids[m_progress];
+    // 修复：始终显示当前进度的状态，而不是最终状态
+    int displayProgress = qMin(m_progress, m_dijkstraState.stepGrids.size() - 1);
+    
+    if (displayProgress >= 0 && displayProgress < m_dijkstraState.stepGrids.size()) {
+        const auto& grid = m_dijkstraState.stepGrids[displayProgress];
         
-        // 检查是否在最终路径中
+        // 检查是否在最终路径中 - 只有在算法完成且是最后一步时才显示
         bool inFinalPath = false;
-        // 只要该单元格已被探索（在开放或关闭集合中），就检查是否在最终路径上
-        if ((grid[y][x].isClosed || grid[y][x].isOpen) && !m_dijkstraState.finalPath.isEmpty()) {
+        if (m_dijkstraState.finished && displayProgress == (m_dijkstraState.stepGrids.size() - 1)) {
             for (const QPoint &p : m_dijkstraState.finalPath) {
                 if (p.x() == x && p.y() == y) {
                     inFinalPath = true;
@@ -734,30 +799,23 @@ QVariantMap Pathfinder::getDijkstraCell(int x, int y) const {
     }
     
     // 默认数据
-    QVariantMap defaultData;
-    defaultData["x"] = x;
-    defaultData["y"] = y;
-    defaultData["isObstacle"] = false;
-    defaultData["g"] = 999;
-    defaultData["h"] = 0;
-    defaultData["f"] = 999;
-    defaultData["isOpen"] = false;
-    defaultData["isClosed"] = false;
-    defaultData["isFinalPath"] = false;
-    return defaultData;
+    return createDefaultCellData(x, y);
 }
 
-// 修改：获取Greedy单元格数据，改进最终路径显示逻辑
+// 同样修改 getGreedyCell 方法
 QVariantMap Pathfinder::getGreedyCell(int x, int y) const {
     if (x < 0 || x >= m_gridSize || y < 0 || y >= m_gridSize) {
         return QVariantMap();
     }
     
-    if (m_progress < m_greedyState.stepGrids.size()) {
-        const auto& grid = m_greedyState.stepGrids[m_progress];
+    // 修复：始终显示当前进度的状态
+    int displayProgress = qMin(m_progress, m_greedyState.stepGrids.size() - 1);
+    
+    if (displayProgress >= 0 && displayProgress < m_greedyState.stepGrids.size()) {
+        const auto& grid = m_greedyState.stepGrids[displayProgress];
         
         bool inFinalPath = false;
-        if ((grid[y][x].isClosed || grid[y][x].isOpen) && !m_greedyState.finalPath.isEmpty()) {
+        if (m_greedyState.finished && displayProgress == (m_greedyState.stepGrids.size() - 1)) {
             for (const QPoint &p : m_greedyState.finalPath) {
                 if (p.x() == x && p.y() == y) {
                     inFinalPath = true;
@@ -769,30 +827,23 @@ QVariantMap Pathfinder::getGreedyCell(int x, int y) const {
         return cellToVariantMap(grid[y][x], inFinalPath);
     }
     
-    QVariantMap defaultData;
-    defaultData["x"] = x;
-    defaultData["y"] = y;
-    defaultData["isObstacle"] = false;
-    defaultData["g"] = 999;
-    defaultData["h"] = 0;
-    defaultData["f"] = 999;
-    defaultData["isOpen"] = false;
-    defaultData["isClosed"] = false;
-    defaultData["isFinalPath"] = false;
-    return defaultData;
+    return createDefaultCellData(x, y);
 }
 
-// 修改：获取A*单元格数据，改进最终路径显示逻辑
+// 同样修改 getAStarCell 方法
 QVariantMap Pathfinder::getAStarCell(int x, int y) const {
     if (x < 0 || x >= m_gridSize || y < 0 || y >= m_gridSize) {
         return QVariantMap();
     }
     
-    if (m_progress < m_aStarState.stepGrids.size()) {
-        const auto& grid = m_aStarState.stepGrids[m_progress];
+    // 修复：始终显示当前进度的状态
+    int displayProgress = qMin(m_progress, m_aStarState.stepGrids.size() - 1);
+    
+    if (displayProgress >= 0 && displayProgress < m_aStarState.stepGrids.size()) {
+        const auto& grid = m_aStarState.stepGrids[displayProgress];
         
         bool inFinalPath = false;
-        if ((grid[y][x].isClosed || grid[y][x].isOpen) && !m_aStarState.finalPath.isEmpty()) {
+        if (m_aStarState.finished && displayProgress == (m_aStarState.stepGrids.size() - 1)) {
             for (const QPoint &p : m_aStarState.finalPath) {
                 if (p.x() == x && p.y() == y) {
                     inFinalPath = true;
@@ -804,10 +855,14 @@ QVariantMap Pathfinder::getAStarCell(int x, int y) const {
         return cellToVariantMap(grid[y][x], inFinalPath);
     }
     
+    return createDefaultCellData(x, y);
+}
+
+QVariantMap Pathfinder::createDefaultCellData(int x, int y) const {
     QVariantMap defaultData;
     defaultData["x"] = x;
     defaultData["y"] = y;
-    defaultData["isObstacle"] = false;
+    defaultData["isObstacle"] = m_obstacles[y][x];
     defaultData["g"] = 999;
     defaultData["h"] = 0;
     defaultData["f"] = 999;
@@ -822,4 +877,28 @@ Pathfinder::Cell* Pathfinder::getCell(QVector<QVector<Pathfinder::Cell>>& grid, 
         return &grid[y][x];
     }
     return nullptr;
+}
+
+// 实现 debugStepInfo 方法
+void Pathfinder::debugStepInfo() const {
+    std::cout << "\n=== STEP DEBUG INFO ===" << std::endl;
+    std::cout << "Current progress: " << m_progress << "/" << m_maxProgress << std::endl;
+    std::cout << "Dijkstra steps: " << m_dijkstraState.stepGrids.size() 
+              << ", finished: " << m_dijkstraState.finished << std::endl;
+    std::cout << "Greedy steps: " << m_greedyState.stepGrids.size() 
+              << ", finished: " << m_greedyState.finished << std::endl;
+    std::cout << "A* steps: " << m_aStarState.stepGrids.size() 
+              << ", finished: " << m_aStarState.finished << std::endl;
+    
+    // 检查特定单元格在不同步骤的状态
+    if (m_dijkstraState.stepGrids.size() > 0) {
+        std::cout << "Dijkstra start cell at step 0: " 
+                  << "g=" << m_dijkstraState.stepGrids[0][m_start.y()][m_start.x()].g 
+                  << ", isOpen=" << m_dijkstraState.stepGrids[0][m_start.y()][m_start.x()].isOpen << std::endl;
+    }
+    if (m_dijkstraState.stepGrids.size() > m_progress) {
+        std::cout << "Dijkstra start cell at current step: " 
+                  << "g=" << m_dijkstraState.stepGrids[m_progress][m_start.y()][m_start.x()].g 
+                  << ", isOpen=" << m_dijkstraState.stepGrids[m_progress][m_start.y()][m_start.x()].isOpen << std::endl;
+    }
 }

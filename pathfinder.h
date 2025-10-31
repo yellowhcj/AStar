@@ -44,11 +44,15 @@ public:
     Q_INVOKABLE void stopSimulation();
     Q_INVOKABLE void resetSimulation();
     Q_INVOKABLE void debugPrintGrids();
+    Q_INVOKABLE void clearAllObstacles();
     
     // 直接获取单元格数据的函数
     Q_INVOKABLE QVariantMap getDijkstraCell(int x, int y) const;
     Q_INVOKABLE QVariantMap getGreedyCell(int x, int y) const;
     Q_INVOKABLE QVariantMap getAStarCell(int x, int y) const;
+    
+    // 添加调试方法
+    Q_INVOKABLE void debugStepInfo() const;
 
 signals:
     void gridSizeChanged();
@@ -121,6 +125,7 @@ private:
     QVector<QVector<Cell>> deepCopyGrid(const QVector<QVector<Cell>>& source) const;
     
     void debugPrintGrid(const QString& name, const QVector<QVector<Cell>>& grid, const QVector<QPoint>& path) const;
+    QVariantMap createDefaultCellData(int x, int y) const;
 };
 
 #endif // PATHFINDER_H
