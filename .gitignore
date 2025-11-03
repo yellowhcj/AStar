@@ -1,6 +1,7 @@
 # Build directories
 build*/
 BUILD*/
+Application/
 CMakeFiles/
 CMakeCache.txt
 cmake-build-*/
