@@ -15,7 +15,7 @@
 ## 技术架构
 | 组件 | 技术栈 |
 |------|--------|
-| 前端 | Qt Quick (QML) + Qt6 |
+| 前端 | Qt Quick (QML) + Qt6.7.2 |
 | 后端 | C++17 |
 | 构建系统 | CMake 3.16+ |
 | 设计模式 | MVC 架构 + 信号槽机制 |
@@ -32,7 +32,7 @@ mkdir build
 
 # 2. 配置项目（Windows示例）
 # 注意替换为你的Qt安装路径
-cmake -S . -B build -DCMAKE_PREFIX_PATH="C:/Qt/6.5.0/msvc2019_64"
+cmake -S . -B build -DCMAKE_PREFIX_PATH="C:/Qt/6.7.2/msvc2019_64"
 
 # 3. 编译项目
 cmake --build build --config Release
@@ -48,10 +48,10 @@ build/Release/AStar.exe
 cd build/Release
 
 # 自动部署依赖库（MSVC示例）
-"C:/Qt/6.5.0/msvc2019_64/bin/windeployqt.exe" AStar.exe
+"C:/Qt/6.7.2/msvc2019_64/bin/windeployqt.exe" AStar.exe
 
 # 手动复制QML控件（若需要）
-copy -r "C:/Qt/6.5.0/msvc2019_64/qml/QtQuick/Controls" ./qml/QtQuick/
+copy -r "C:/Qt/6.7.2/msvc2019_64/qml/QtQuick/Controls" ./qml/QtQuick/
 ```
 
 2. 重要注意事项：
